@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "WinRTWrapper.SourceGenerators": {
+      "commandName": "DebugRoslynComponent",
+      "targetProject": "../WinRTWrapper.Test/WinRTWrapper.Test.csproj"
+    }
+  }
+}

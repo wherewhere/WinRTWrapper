@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36121.58
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinRTWrapper.SourceGenerators", "WinRTWrapper.SourceGenerators\WinRTWrapper.SourceGenerators.csproj", "{5C8FEB73-9DA6-5322-ECFA-F8C4B4AEB02B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WinRTWrapper.Test", "WinRTWrapper.Test\WinRTWrapper.Test.csproj", "{002D240A-A7B4-4AFF-B8FD-E73B0BACAEAF}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{5C8FEB73-9DA6-5322-ECFA-F8C4B4AEB02B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5C8FEB73-9DA6-5322-ECFA-F8C4B4AEB02B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5C8FEB73-9DA6-5322-ECFA-F8C4B4AEB02B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5C8FEB73-9DA6-5322-ECFA-F8C4B4AEB02B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{002D240A-A7B4-4AFF-B8FD-E73B0BACAEAF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{002D240A-A7B4-4AFF-B8FD-E73B0BACAEAF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{002D240A-A7B4-4AFF-B8FD-E73B0BACAEAF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{002D240A-A7B4-4AFF-B8FD-E73B0BACAEAF}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {26C8CCE8-1211-49C3-B7DA-3B3748E8356F}
+	EndGlobalSection
+EndGlobal
