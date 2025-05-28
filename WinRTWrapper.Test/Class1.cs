@@ -1,4 +1,7 @@
-﻿using WinRTWrapper.CodeAnalysis;
+﻿using System;
+using System.Collections;
+using System.Runtime.InteropServices.WindowsRuntime;
+using WinRTWrapper.CodeAnalysis;
 
 namespace WinRTWrapper.Test
 {
@@ -8,6 +11,18 @@ namespace WinRTWrapper.Test
     internal class A
     {
         private int b;
+
+        public int this[int index]
+        {
+            get
+            {
+                return b;
+            }
+            set
+            {
+                b = value;
+            }
+        }
 
         /// <summary>
         /// Gets or sets the value of b.
@@ -43,6 +58,10 @@ namespace WinRTWrapper.Test
         public void E() { }
 
         internal void F() { }
+
+#if !NET
+        public event EventHandler<int> G;
+#endif
     }
 
     /// <summary>
@@ -57,6 +76,14 @@ namespace WinRTWrapper.Test
         }
 
         private T a;
+
+        public T this[int index]
+        {
+            get
+            {
+                return a;
+            }
+        }
 
         /// <summary>
         /// Gets or sets the value of a.
@@ -121,13 +148,17 @@ namespace WinRTWrapper.Test
         }
 
         public static void E() { }
+
+#if !NET
+        public static event EventHandler<int> G;
+#endif
     }
 
     [GenerateWinRTWrapper(typeof(A))]
-    public partial class Class1 { }
+    public sealed partial class Class1 { }
 
     [GenerateWinRTWrapper(typeof(B<int>))]
-    public partial class Class2 { }
+    public sealed partial class Class2 { }
 
     [GenerateWinRTWrapper(typeof(C))]
     public static partial class Class3 { }
