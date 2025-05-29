@@ -1,165 +1,304 @@
 ﻿using System;
-using System.Collections;
-using System.Runtime.InteropServices.WindowsRuntime;
 using WinRTWrapper.CodeAnalysis;
 
 namespace WinRTWrapper.Test
 {
     /// <summary>
-    /// Class A is a simple class.
+    /// Class <see cref="Simple"/> is a simple class.
     /// </summary>
-    internal class A
+    internal class Simple
     {
-        private int b;
+        private int _field;
 
+        /// <summary>
+        /// Gets or sets the value at the specified index.
+        /// </summary>
+        /// <param name="index">The index of the value to get or set.</param>
+        /// <returns>The value at the specified index.</returns>
         public int this[int index]
         {
             get
             {
-                return b;
+                return _field;
             }
             set
             {
-                b = value;
+                _field = value;
             }
         }
 
         /// <summary>
-        /// Gets or sets the value of b.
+        /// Gets or sets the value of <see cref="_field"/>.
         /// </summary>
-        public int B
+        public int Property
         {
             get
             {
-                return b;
+                return _field;
             }
             set
             {
-                b = value;
+                _field = value;
             }
         }
 
         /// <summary>
-        /// Gets or sets the value of b.
+        /// Gets the value of <see cref="_field"/> without allowing modification.
         /// </summary>
-        public int C
+        public int ReadonlyProperty
         {
             get
             {
-                return b;
+                return _field;
             }
         }
 
-        public int D()
+        /// <summary>
+        /// Retrieves the value of the private field <see cref="_field"/>.
+        /// </summary>
+        /// <returns>The integer value stored in the field <see cref="_field"/>.</returns>
+        public int Method()
         {
-            return b;
+            return _field;
         }
 
-        public void E() { }
+        /// <summary>
+        /// Performs an operation that does not return a value.
+        /// </summary>
+        public void VoidMethod()
+        {
+            InternalMethod();
+        }
 
-        internal void F() { }
+        /// <summary>
+        /// Executes an internal operation that does not return a value.
+        /// </summary>
+        internal void InternalMethod()
+        {
+            if (Event != null)
+            {
+                Event(this, _field);
+            }
+        }
 
-#if !NET
-        public event EventHandler<int> G;
-#endif
+        /// <summary>
+        /// Occurs when the associated action is triggered, providing an integer value as event data.
+        /// </summary>
+        public event EventHandler<int> Event;
+
+        /// <summary>
+        /// Other member that does not return a value.
+        /// </summary>
+        public static void OtherMember() { }
     }
 
     /// <summary>
-    /// Class B is a generic class.
+    /// Class <see cref="GenericSimple{T}"/> is a generic class.
     /// </summary>
     /// <typeparam name="T">The type parameter.</typeparam>
-    internal class B<T>
+    internal class GenericSimple<T>
     {
-        public B(T a)
+        private T _field;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="GenericSimple{T}"/> class with the specified value.
+        /// </summary>
+        /// <param name="field">The value to initialize the instance with. This value is assigned to the internal field.</param>
+        public GenericSimple(T field)
         {
-            this.a = a;
+            _field = field;
         }
 
-        private T a;
-
+        /// <summary>
+        /// Gets the element at the specified index.
+        /// </summary>
+        /// <param name="index">The zero-based index of the element to retrieve.</param>
+        /// <returns>The element at the specified index.</returns>
         public T this[int index]
         {
             get
             {
-                return a;
+                return _field;
             }
         }
 
         /// <summary>
-        /// Gets or sets the value of a.
+        /// Gets or sets the value of <see cref="_field"/>.
         /// </summary>
-        public T A
+        public T Property
         {
             get
             {
-                return a;
+                return _field;
             }
             set
             {
-                a = value;
+                _field = value;
             }
         }
 
         /// <summary>
-        /// Gets or sets the value of b.
+        /// Gets the value of <see cref="_field"/> without allowing modification.
         /// </summary>
-        public T C
+        public T ReadonlyProperty
         {
             get
             {
-                return a;
+                return _field;
             }
         }
+
+        /// <summary>
+        /// Retrieves the value of the private field <see cref="_field"/>.
+        /// </summary>
+        /// <returns>The integer value stored in the field <see cref="_field"/>.</returns>
+        public T Method()
+        {
+            return _field;
+        }
+
+        /// <summary>
+        /// Performs an operation that does not return a value.
+        /// </summary>
+        public void VoidMethod()
+        {
+            InternalMethod();
+        }
+
+        /// <summary>
+        /// Executes an internal operation that does not return a value.
+        /// </summary>
+        internal void InternalMethod()
+        {
+            if (Event != null)
+            {
+                Event(this, _field);
+            }
+        }
+
+        /// <summary>
+        /// Occurs when the associated action is triggered, providing an integer value as event data.
+        /// </summary>
+        public event EventHandler<T> Event;
+
+        /// <summary>
+        /// Other member that does not return a value.
+        /// </summary>
+        public static void OtherMember() { }
     }
 
-    internal static class C
+    /// <summary>
+    /// Class <see cref="StaticSimple"/> is a static class with properties and methods.
+    /// </summary>
+    internal static class StaticSimple
     {
-        private static int b;
+        private static int _field;
 
         /// <summary>
-        /// Gets or sets the value of b.
+        /// Gets or sets the value of <see cref="_field"/>.
         /// </summary>
-        public static int A
+        public static int Property
         {
             get
             {
-                return b;
-            }
-        }
-
-        /// <summary>
-        /// Gets or sets the value of b.
-        /// </summary>
-        public static int B
-        {
-            get
-            {
-                return b;
+                return _field;
             }
             set
             {
-                b = value;
+                _field = value;
             }
         }
 
-        public static int D()
+        /// <summary>
+        /// Gets or sets the value of <see cref="_field"/> with a setter that allows modification.
+        /// </summary>
+        public static int ReadonlyProperty
         {
-            return b;
+            get
+            {
+                return _field;
+            }
         }
 
-        public static void E() { }
+        /// <summary>
+        /// Retrieves the value of the private field <see cref="_field"/>.
+        /// </summary>
+        /// <returns>The integer value stored in the field <see cref="_field"/>.</returns>
+        public static int Method()
+        {
+            return _field;
+        }
 
-#if !NET
-        public static event EventHandler<int> G;
-#endif
+        /// <summary>
+        /// Performs an operation that does not return a value.
+        /// </summary>
+        public static void VoidMethod()
+        {
+            InternalMethod();
+        }
+
+        /// <summary>
+        /// Executes an internal operation that does not return a value.
+        /// </summary>
+        internal static void InternalMethod()
+        {
+            if (Event != null)
+            {
+                Event(null, _field);
+            }
+        }
+
+        /// <summary>
+        /// Occurs when the associated operation triggers an event with an integer value.
+        /// </summary>
+        public static event EventHandler<int> Event;
+
+        /// <summary>
+        /// Other member that does not return a value.
+        /// </summary>
+        public static void OtherMember() { }
     }
 
-    [GenerateWinRTWrapper(typeof(A))]
-    public sealed partial class Class1 { }
+    public interface I
+    {
+        /// <summary>
+        /// Gets or sets the value.
+        /// </summary>
+        int Property {  get; set; }
 
-    [GenerateWinRTWrapper(typeof(B<int>))]
+        /// <summary>
+        /// Gets or sets the value with a setter that allows modification.
+        /// </summary>
+        int ReadonlyProperty { get; }
+
+        /// <summary>
+        /// Retrieves the value of the private field.
+        /// </summary>
+        /// <returns>The integer value stored in the field.</returns>
+        int Method();
+
+        /// <summary>
+        /// Performs an operation that does not return a value.
+        /// </summary>
+        void VoidMethod();
+
+        /// <summary>
+        /// Occurs when the associated operation triggers an event with an integer value.
+        /// </summary>
+        event EventHandler<int> Event;
+    }
+
+    [GenerateWinRTWrapper(typeof(Simple), GenerateMember.Interface)]
+    public sealed partial class Class1
+#if NET
+        { }
+#else
+        : I { }
+#endif
+
+    [GenerateWinRTWrapper(typeof(GenericSimple<int>), typeof(I))]
     public sealed partial class Class2 { }
 
-    [GenerateWinRTWrapper(typeof(C))]
+    [GenerateWinRTWrapper(typeof(StaticSimple))]
     public static partial class Class3 { }
 }

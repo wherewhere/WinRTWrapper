@@ -12,7 +12,7 @@ namespace WinRTWrapper.SourceGenerators
         /// </summary>
         /// <param name="source">The source wrapper type.</param>
         /// <returns>The initialized <see cref="StringBuilder"/>.</returns>
-        private static StringBuilder InitBuilder(WrapperType source)
+        private static StringBuilder InitBuilder(in (INamedTypeSymbol, INamedTypeSymbol) source)
         {
             StringBuilder builder = new();
             (INamedTypeSymbol symbol, INamedTypeSymbol target) = source;
@@ -46,7 +46,7 @@ namespace WinRTWrapper.SourceGenerators
         /// <param name="method">The method symbol to add.</param>
         /// <param name="builder">The <see cref="StringBuilder"/> to append the method code to.</param>
         /// <returns>The updated <see cref="StringBuilder"/> with the method code added.</returns>
-        private static StringBuilder AddMethod(WrapperType source, IMethodSymbol method, StringBuilder builder, ref bool? needConstructor)
+        private static StringBuilder AddMethod(in (INamedTypeSymbol, INamedTypeSymbol) source, IMethodSymbol method, StringBuilder builder, ref bool? needConstructor)
         {
             (INamedTypeSymbol symbol, INamedTypeSymbol target) = source;
             switch (method)
@@ -92,7 +92,7 @@ namespace WinRTWrapper.SourceGenerators
         /// <param name="property">The property symbol to add.</param>
         /// <param name="builder">The <see cref="StringBuilder"/> to append the property code to.</param>
         /// <returns>The updated <see cref="StringBuilder"/> with the property code added.</returns>
-        private static StringBuilder AddProperty(WrapperType source, IPropertySymbol property, StringBuilder builder)
+        private static StringBuilder AddProperty(in (INamedTypeSymbol, INamedTypeSymbol) source, IPropertySymbol property, StringBuilder builder)
         {
             (INamedTypeSymbol symbol, INamedTypeSymbol target) = source;
             switch (property)
@@ -180,40 +180,62 @@ namespace WinRTWrapper.SourceGenerators
         /// <param name="event">The event symbol to add.</param>
         /// <param name="builder">The <see cref="StringBuilder"/> to append the event code to.</param>
         /// <returns>The updated <see cref="StringBuilder"/> with the event code added.</returns>
-        private static object AddEvent(WrapperType source, IEventSymbol @event, StringBuilder builder)
+        private static object AddEvent(INamedTypeSymbol target, IEventSymbol @event, StringBuilder builder, GenerationOptions options)
         {
-            (_, INamedTypeSymbol target) = source;
             IMethodSymbol invoke = @event.Type.GetMembers().OfType<IMethodSymbol>().FirstOrDefault(x => x.Name == "Invoke");
-            _ = builder.AppendLine(
-                $$"""
-                        private {{(@event.IsStatic ? "static " : string.Empty)}}bool _is_{{@event.Name}}_EventRegistered = false;
-                        private {{(@event.IsStatic ? "static " : string.Empty)}}readonly global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationTokenTable<{{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}> _{{@event.Name}}_EventTable = new global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationTokenTable<{{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}>();
-                        /// <inheritdoc cref="{{@event.GetDocumentationCommentId()}}"/>
-                        {{GetMemberModify(@event)}}event {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} {{@event.Name}}
-                        {
-                            add
-                            {
-                                if (!_is_{{@event.Name}}_EventRegistered)
+            switch (options)
+            {
+                case { IsWinMDObject: true }:
+                    _ = builder.AppendLine(
+                        $$"""
+                                private {{(@event.IsStatic ? "static " : string.Empty)}}bool _is_{{@event.Name}}_EventRegistered = false;
+                                private {{(@event.IsStatic ? "static " : string.Empty)}}readonly global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationTokenTable<{{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}> _{{@event.Name}}_EventTable = new global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationTokenTable<{{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}>();
+                                /// <inheritdoc cref="{{@event.GetDocumentationCommentId()}}"/>
+                                {{GetMemberModify(@event)}}event {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} {{@event.Name}}
                                 {
-                                    {{GetMemberTarget(target, @event)}}.{{@event.Name}} += delegate ({{string.Join(", ", invoke.Parameters.Select(x => x.ToDisplayString()))}}) 
+                                    add
                                     {
-                                        {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} @event = _{{@event.Name}}_EventTable.InvocationList;
-                                        if (@event != null)
+                                        if (!_is_{{@event.Name}}_EventRegistered)
                                         {
-                                            {{(invoke.ReturnsVoid ? string.Empty : "return ")}}@event.Invoke({{string.Join(", ", invoke.Parameters.Select(x => x.Name))}});
+                                            {{GetMemberTarget(target, @event)}}.{{@event.Name}} += delegate ({{string.Join(", ", invoke.Parameters.Select(x => x.ToDisplayString()))}}) 
+                                            {
+                                                {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} @event = _{{@event.Name}}_EventTable.InvocationList;
+                                                if (@event != null)
+                                                {
+                                                    {{(invoke.ReturnsVoid ? string.Empty : "return ")}}@event.Invoke({{string.Join(", ", invoke.Parameters.Select(x => x.Name))}});
+                                                }
+                                            };
+                                            _is_{{@event.Name}}_EventRegistered = true;
                                         }
-                                    };
-                                    _is_{{@event.Name}}_EventRegistered = true;
+                                        return _{{@event.Name}}_EventTable.AddEventHandler(value);
+                                    }
+                                    remove
+                                    {
+                                        _{{@event.Name}}_EventTable.RemoveEventHandler(value);
+                                    }
                                 }
-                                return _{{@event.Name}}_EventTable.AddEventHandler(value);
-                            }
-                            remove
-                            {
-                                _{{@event.Name}}_EventTable.RemoveEventHandler(value);
-                            }
-                        }
 
-                """);
+                        """);
+                    break;
+                default:
+                    _ = builder.AppendLine(
+                        $$"""
+                                /// <inheritdoc cref="{{@event.GetDocumentationCommentId()}}"/>
+                                {{GetMemberModify(@event)}}event {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} {{@event.Name}}
+                                {
+                                    add
+                                    {
+                                        {{GetMemberTarget(target, @event)}}.{{@event.Name}} += value;
+                                    }
+                                    remove
+                                    {
+                                        {{GetMemberTarget(target, @event)}}.{{@event.Name}} -= value;
+                                    }
+                                }
+
+                        """);
+                    break;
+            }
             return builder;
         }
 
