@@ -90,6 +90,17 @@ namespace WinRTWrapper.Test
         /// Other member that does not return a value.
         /// </summary>
         public static void OtherMember() { }
+
+        /// <summary>
+        /// Gets a new instance of the <see cref="Simple"/> class with the specified value.
+        /// </summary>
+        /// <param name="self">The value to initialize the instance with.</param>
+        /// <returns>The new instance of <see cref="Simple"/>.</returns>
+        [return: WinRTWrapperMarshalUsing(typeof(SimpleWrapper))]
+        public static Simple GetSelf([WinRTWrapperMarshalUsing(typeof(SimpleWrapper))] Simple self)
+        {
+            return self;
+        }
     }
 
     /// <summary>
@@ -185,6 +196,17 @@ namespace WinRTWrapper.Test
         /// Other member that does not return a value.
         /// </summary>
         public static void OtherMember() { }
+
+        /// <summary>
+        /// Gets a new instance of the <see cref="GenericSimple{T}"/> class with the specified value.
+        /// </summary>
+        /// <param name="self">The value to initialize the instance with.</param>
+        /// <returns>The new instance of <see cref="GenericSimple{T}"/>.</returns>
+        [return: WinRTWrapperMarshalUsing(typeof(GenericSimpleWrapper))]
+        public static GenericSimple<T> GetSelf([WinRTWrapperMarshalUsing(typeof(GenericSimpleWrapper))] GenericSimple<T> self)
+        {
+            return self;
+        }
     }
 
     /// <summary>
@@ -221,6 +243,22 @@ namespace WinRTWrapper.Test
         }
 
         /// <summary>
+        /// Gets or sets a static property of type <see cref="Simple"/>.
+        /// </summary>
+        [WinRTWrapperMarshalUsing(typeof(SimpleWrapper))]
+        public static Simple SimpleProperty
+        {
+            get
+            {
+                return new Simple();
+            }
+            set
+            {
+                return;
+            }
+        }
+
+        /// <summary>
         /// Retrieves the value of the private field <see cref="_field"/>.
         /// </summary>
         /// <returns>The integer value stored in the field <see cref="_field"/>.</returns>
@@ -246,6 +284,11 @@ namespace WinRTWrapper.Test
             {
                 Event(null, _field);
             }
+
+            if (DelegateEvent != null)
+            {
+                DelegateEvent(new GenericSimple<int>(_field));
+            }
         }
 
         /// <summary>
@@ -254,10 +297,28 @@ namespace WinRTWrapper.Test
         public static event EventHandler<int> Event;
 
         /// <summary>
+        /// Occurs when the associated operation triggers an event with a <see cref="GenericSimple{T}"/> argument.
+        /// </summary>
+        [WinRTWrapperMarshalUsing(typeof(DelegateSimpleMarshaller))]
+        public static event Func<GenericSimple<int>, Simple> DelegateEvent;
+
+        /// <summary>
         /// Other member that does not return a value.
         /// </summary>
         public static void OtherMember() { }
+
+        /// <summary>
+        /// Gets a new instance of the <see cref="Simple"/> class.
+        /// </summary>
+        /// <returns>The new instance of <see cref="Simple"/>.</returns>
+        [return: WinRTWrapperMarshalUsing(typeof(SimpleWrapper))]
+        public static Simple GetSimple()
+        {
+            return new Simple();
+        }
     }
+
+    public delegate SimpleWrapper DelegateSimple(GenericSimpleWrapper arg);
 
     public interface I
     {
@@ -288,17 +349,38 @@ namespace WinRTWrapper.Test
         event EventHandler<int> Event;
     }
 
+#if NET
+    [WinRTWrapperMarshaller(typeof(Simple), typeof(SimpleWrapper))]
+#else
+    [WinRTWrapperMarshaller(typeof(Simple), typeof(I))]
+#endif
     [GenerateWinRTWrapper(typeof(Simple), GenerateMember.Interface)]
-    public sealed partial class Class1
+    public sealed partial class SimpleWrapper
 #if NET
         { }
 #else
         : I { }
 #endif
 
-    [GenerateWinRTWrapper(typeof(GenericSimple<int>), typeof(I))]
-    public sealed partial class Class2 { }
+    [WinRTWrapperMarshaller(typeof(GenericSimple<int>), typeof(GenericSimpleWrapper))]
+    [GenerateWinRTWrapper(typeof(GenericSimple<int>))]
+    public sealed partial class GenericSimpleWrapper { }
 
+    [WinRTWrapperMarshaller(typeof(StaticSimple), typeof(StaticSimpleWrapper))]
     [GenerateWinRTWrapper(typeof(StaticSimple))]
-    public static partial class Class3 { }
+    public static partial class StaticSimpleWrapper { }
+
+    [WinRTWrapperMarshaller(typeof(Func<GenericSimple<int>, Simple>), typeof(DelegateSimple))]
+    internal class DelegateSimpleMarshaller
+    {
+        public static DelegateSimple ConvertToWrapper(Func<GenericSimple<int>, Simple> managed)
+        {
+            return delegate (GenericSimpleWrapper x) { return new SimpleWrapper(managed(GenericSimpleWrapper.ConvertToManaged(x))); };
+        }
+
+        public static Func<GenericSimple<int>, Simple> ConvertToManaged(DelegateSimple wrapper)
+        {
+            return delegate (GenericSimple<int> x) { return SimpleWrapper.ConvertToManaged(wrapper(GenericSimpleWrapper.ConvertToWrapper(x))); };
+        }
+    }
 }

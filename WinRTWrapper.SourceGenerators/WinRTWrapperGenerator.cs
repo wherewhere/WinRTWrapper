@@ -78,7 +78,7 @@ namespace WinRTWrapper.SourceGenerators
                         _ = AddProperty((symbol, target), property, builder);
                         break;
                     case IEventSymbol @event:
-                        _ = AddEvent(target, @event, builder, options);
+                        _ = AddEvent((symbol, target), @event, builder, options);
                         break;
                 }
             }
