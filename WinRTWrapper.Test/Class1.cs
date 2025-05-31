@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 using WinRTWrapper.CodeAnalysis;
 
 namespace WinRTWrapper.Test
@@ -258,6 +259,44 @@ namespace WinRTWrapper.Test
             }
         }
 
+#if COMP_NETSTANDARD2_0
+        public static System.Drawing.PointF PointProperty
+        {
+            get
+            {
+                return new System.Drawing.PointF(1, 2);
+            }
+            set
+            {
+                return;
+            }
+        }
+
+        public static System.Drawing.SizeF SizeProperty
+        {
+            get
+            {
+                return new System.Drawing.SizeF(1, 2);
+            }
+            set
+            {
+                return;
+            }
+        }
+
+        public static System.Drawing.RectangleF RectangleProperty
+        {
+            get
+            {
+                return new System.Drawing.RectangleF(1, 2, 3, 4);
+            }
+            set
+            {
+                return;
+            }
+        }
+#endif
+
         /// <summary>
         /// Retrieves the value of the private field <see cref="_field"/>.
         /// </summary>
@@ -315,6 +354,11 @@ namespace WinRTWrapper.Test
         public static Simple GetSimple()
         {
             return new Simple();
+        }
+
+        public static Task GetTaskAsync()
+        {
+            return Task.CompletedTask;
         }
     }
 

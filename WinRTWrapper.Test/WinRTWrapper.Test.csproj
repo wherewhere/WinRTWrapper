@@ -34,6 +34,10 @@
     <TargetPlatformVersion>10.0.22621.0</TargetPlatformVersion>
   </PropertyGroup>
 
+  <PropertyGroup Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'netstandard2.0'))">
+    <DefineConstants>$(DefineConstants);COMP_NETSTANDARD2_0</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'uap'))">
     <PackageReference Include="Microsoft.NETCore.UniversalWindowsPlatform" Version="6.2.14" PrivateAssets="all" />
   </ItemGroup>

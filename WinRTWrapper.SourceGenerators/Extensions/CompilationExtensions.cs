@@ -1,9 +1,6 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
-// The .NET Foundation licenses this file to you under the MIT license.
-// See the LICENSE file in the project root for more information.
-
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using System.Diagnostics.CodeAnalysis;
 
 namespace WinRTWrapper.SourceGenerators.Extensions
 {
@@ -20,36 +17,25 @@ namespace WinRTWrapper.SourceGenerators.Extensions
         /// <returns>Whether <paramref name="compilation"/> is using at least the specified language version.</returns>
         public static bool HasLanguageVersionAtLeastEqualTo(this Compilation compilation, LanguageVersion languageVersion)
         {
-            return ((CSharpCompilation)compilation).LanguageVersion >= languageVersion;
+            return (compilation as CSharpCompilation)?.LanguageVersion >= languageVersion;
         }
 
         /// <summary>
-        /// <para>
-        /// Checks whether or not a type with a specified metadata name is accessible from a given <see cref="Compilation"/> instance.
-        /// </para>
-        /// <para>
-        /// This method enumerates candidate type symbols to find a match in the following order:
-        /// <list type="number">
-        ///   <item><description>
-        ///     If only one type with the given name is found within the compilation and its referenced assemblies, check its accessibility.
-        ///   </description></item>
-        ///   <item><description>
-        ///     If the current <paramref name="compilation"/> defines the symbol, check its accessibility.
-        ///   </description></item>
-        ///   <item><description>
-        ///     Otherwise, check whether the type exists and is accessible from any of the referenced assemblies.
-        ///   </description></item>
-        /// </list>
-        /// </para>
+        /// Attempts to retrieve an accessible type symbol from the specified compilation by its fully qualified
+        /// metadata name.
         /// </summary>
-        /// <param name="compilation">The <see cref="Compilation"/> to consider for analysis.</param>
-        /// <param name="fullyQualifiedMetadataName">The fully-qualified metadata type name to find.</param>
-        /// <returns>Whether a type with the specified metadata name can be accessed from the given compilation.</returns>
-        public static bool HasAccessibleTypeWithMetadataName(this Compilation compilation, string fullyQualifiedMetadataName)
+        /// <param name="compilation">The <see cref="Compilation"/> instance to search for the type symbol.</param>
+        /// <param name="fullyQualifiedMetadataName">The fully qualified metadata name of the type to locate.</param>
+        /// <param name="symbol">When this method returns <see langword="true"/>, contains the accessible <see cref="INamedTypeSymbol"/> that
+        /// matches the specified metadata name. Otherwise, contains <see langword="null"/>.</param>
+        /// <returns><see langword="true"/> if an accessible type symbol matching the specified metadata name is found;
+        /// otherwise, <see langword="false"/>.</returns>
+        public static bool GetAccessibleTypeWithMetadataName(this Compilation compilation, string fullyQualifiedMetadataName, [NotNullWhen(true)] out INamedTypeSymbol? symbol)
         {
             // If there is only a single matching symbol, check its accessibility
             if (compilation.GetTypeByMetadataName(fullyQualifiedMetadataName) is INamedTypeSymbol typeSymbol)
             {
+                symbol = typeSymbol;
                 return compilation.IsSymbolAccessibleWithin(typeSymbol, compilation.Assembly);
             }
 
@@ -58,10 +44,12 @@ namespace WinRTWrapper.SourceGenerators.Extensions
             {
                 if (compilation.IsSymbolAccessibleWithin(currentTypeSymbol, compilation.Assembly))
                 {
+                    symbol = currentTypeSymbol;
                     return true;
                 }
             }
 
+            symbol = null;
             return false;
         }
     }

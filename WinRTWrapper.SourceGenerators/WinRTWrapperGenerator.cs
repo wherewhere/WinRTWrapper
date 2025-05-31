@@ -25,6 +25,7 @@ namespace WinRTWrapper.SourceGenerators
             // Prepare all the generation options in a single incremental model
             IncrementalValueProvider<GenerationOptions> generationOptions =
                 context.AnalyzerConfigOptionsProvider
+                .Combine(context.CompilationProvider)
                 .Select(GetGenerationOptions);
 
             IncrementalValuesProvider<WrapperType?> wrapperTypes =
@@ -72,10 +73,10 @@ namespace WinRTWrapper.SourceGenerators
                 switch (member)
                 {
                     case IMethodSymbol method:
-                        _ = AddMethod((symbol, target), method, builder, ref needConstructor);
+                        _ = AddMethod((symbol, target), method, builder, options.Marshals, ref needConstructor);
                         break;
                     case IPropertySymbol property:
-                        _ = AddProperty((symbol, target), property, builder);
+                        _ = AddProperty((symbol, target), property, builder, options.Marshals);
                         break;
                     case IEventSymbol @event:
                         _ = AddEvent((symbol, target), @event, builder, options);
