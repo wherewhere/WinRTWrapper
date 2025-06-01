@@ -9,6 +9,9 @@ namespace WinRTWrapper.Test
     /// </summary>
     internal class Simple
     {
+        /// <summary>
+        /// Field that holds an integer value.
+        /// </summary>
         private int _field;
 
         /// <summary>
@@ -110,6 +113,9 @@ namespace WinRTWrapper.Test
     /// <typeparam name="T">The type parameter.</typeparam>
     internal class GenericSimple<T>
     {
+        /// <summary>
+        /// Field that holds a value of type <typeparamref name="T"/>.
+        /// </summary>
         private T _field;
 
         /// <summary>
@@ -215,6 +221,9 @@ namespace WinRTWrapper.Test
     /// </summary>
     internal static class StaticSimple
     {
+        /// <summary>
+        /// Field that holds an integer value.
+        /// </summary>
         private static int _field;
 
         /// <summary>
@@ -260,6 +269,9 @@ namespace WinRTWrapper.Test
         }
 
 #if COMP_NETSTANDARD2_0
+        /// <summary>
+        /// Gets or sets a <see cref="System.Drawing.PointF"/> value.
+        /// </summary>
         public static System.Drawing.PointF PointProperty
         {
             get
@@ -272,6 +284,9 @@ namespace WinRTWrapper.Test
             }
         }
 
+        /// <summary>
+        /// Gets or sets the size value represented as a <see cref="System.Drawing.SizeF"/> structure.
+        /// </summary>
         public static System.Drawing.SizeF SizeProperty
         {
             get
@@ -284,6 +299,9 @@ namespace WinRTWrapper.Test
             }
         }
 
+        /// <summary>
+        /// Gets or sets a <see cref="System.Drawing.RectangleF"/> defined by its position and size.
+        /// </summary>
         public static System.Drawing.RectangleF RectangleProperty
         {
             get
@@ -356,9 +374,23 @@ namespace WinRTWrapper.Test
             return new Simple();
         }
 
+        /// <summary>
+        /// Returns a completed <see cref="Task"/> instance.
+        /// </summary>
+        /// <returns>A completed <see cref="Task"/> instance.</returns>
         public static Task GetTaskAsync()
         {
             return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Asynchronously retrieves an integer value.
+        /// </summary>
+        /// <returns>A <see cref="Task{TResult}"/> representing the asynchronous operation. The result contains the integer
+        /// value retrieved.</returns>
+        public static Task<int> GetGenericTaskAsync()
+        {
+            return Task.FromResult(_field);
         }
     }
 

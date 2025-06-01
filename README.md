@@ -30,7 +30,7 @@ A wrapper source generator for WinRT
    #pragma warning disable
 
    /// <inheritdoc cref="T:Simple"/>
-   public static partial class SimpleWrapper
+   public sealed partial class SimpleWrapper
    {
        /// <summary>
        /// The target <see cref="T:Simple"/> object of the wrapper.

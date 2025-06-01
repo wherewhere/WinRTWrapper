@@ -3,6 +3,7 @@ using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
+using WinRTWrapper.SourceGenerators.Extensions;
 using WinRTWrapper.SourceGenerators.Models;
 
 namespace WinRTWrapper.SourceGenerators
@@ -23,14 +24,14 @@ namespace WinRTWrapper.SourceGenerators
                 _ = builder.AppendLine(
                     $$"""
                             /// <summary>
-                            /// The target <see cref="{{target.GetDocumentationCommentId()}}"/> object of the wrapper.
+                            /// The target <see cref="{{target.GetConstructedFromDocumentationCommentId()}}"/> object of the wrapper.
                             /// </summary>
                             private readonly {{target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} target;
 
                             /// <summary>
-                            /// Initializes a new instance of the <see cref="{{symbol.GetDocumentationCommentId()}}"/> class with the specified target <see cref="{{target.GetDocumentationCommentId()}}"/> object.
+                            /// Initializes a new instance of the <see cref="{{symbol.GetConstructedFromDocumentationCommentId()}}"/> class with the specified target <see cref="{{target.GetConstructedFromDocumentationCommentId()}}"/> object.
                             /// </summary>
-                            /// <param name="target">The target <see cref="{{target.GetDocumentationCommentId()}}"/> object.</param>
+                            /// <param name="target">The target <see cref="{{target.GetConstructedFromDocumentationCommentId()}}"/> object.</param>
                             internal {{symbol.Name}}({{target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} target)
                             {
                                 this.target = target;
@@ -46,16 +47,20 @@ namespace WinRTWrapper.SourceGenerators
                         _ = builder.AppendLine(
                             $$"""
                                     /// <summary>
-                                    /// Converts a managed type <see cref="{{managedType.GetDocumentationCommentId()}}"/> to a wrapper type <see cref={{wrapperType.GetDocumentationCommentId()}}"/>.
+                                    /// Converts a managed type <see cref="{{managedType.GetConstructedFromDocumentationCommentId()}}"/> to a wrapper type <see cref="{{wrapperType.GetConstructedFromDocumentationCommentId()}}"/>.
                                     /// </summary>
+                                    /// <param name="managed">The managed type to convert.</param>
+                                    /// <returns>The converted wrapper type.</returns>
                                     internal static {{wrapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} ConvertToWrapper({{managedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} managed)
                                     {
                                         return ({{wrapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}})new {{symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}(managed);
                                     }
 
                                     /// <summary>
-                                    /// Converts a wrapper type <see cref={{wrapperType.GetDocumentationCommentId()}}"/> to a managed type <see cref={{managedType.GetDocumentationCommentId()}}"/>.
+                                    /// Converts a wrapper type <see cref="{{wrapperType.GetConstructedFromDocumentationCommentId()}}"/> to a managed type <see cref="{{managedType.GetConstructedFromDocumentationCommentId()}}"/>.
                                     /// </summary>
+                                    /// <param name="wrapper">The wrapper type to convert.</param>
+                                    /// <returns>The converted managed type.</returns>
                                     internal static {{managedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} ConvertToManaged({{wrapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} wrapper)
                                     {
                                         return ({{managedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}})(({{symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}})wrapper).target;
@@ -83,7 +88,7 @@ namespace WinRTWrapper.SourceGenerators
                 case { MethodKind: MethodKind.Constructor }:
                     _ = builder.AppendLine(
                         $$"""
-                                /// <inheritdoc cref="{{method.GetDocumentationCommentId()}}"/>
+                                /// <inheritdoc cref="{{method.GetConstructedFromDocumentationCommentId()}}"/>
                                 public {{symbol.Name}}({{string.Join(" ", method.Parameters.Select(x => x.ToDisplayString()))}})
                                 {
                                     this.target = new {{target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}({{string.Join(", ", method.Parameters.Select(x => x.Name))}});
@@ -104,10 +109,10 @@ namespace WinRTWrapper.SourceGenerators
                     ImmutableArray<(MarshalType marshal, string name)> parameters = [.. method.Parameters.Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type), x.Name))];
                     _ = builder.AppendLine(
                         $$"""
-                                /// <inheritdoc cref="{{method.GetDocumentationCommentId()}}"/>
-                                {{GetMemberModify(method)}}{{returnType.WrapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} {{method.Name}}({{string.Join(" ", parameters.Select(x => $"{x.marshal.WrapperType.ToDisplayString()} {x.name}"))}})
+                                /// <inheritdoc cref="{{method.GetConstructedFromDocumentationCommentId()}}"/>
+                                {{method.GetMemberModify()}}{{returnType.WrapperTypeName}} {{method.Name}}({{string.Join(" ", parameters.Select(x => $"{x.marshal.WrapperTypeName} {x.name}"))}})
                                 {
-                                    {{(method.ReturnsVoid ? string.Empty : "return ")}}{{returnType.ConvertToWrapper($"{GetMemberTarget(target, method)}.{method.Name}({string.Join(", ", parameters.Select(x => x.marshal.ConvertToManaged(x.name)))})")}};
+                                    {{(method.ReturnsVoid ? string.Empty : "return ")}}{{returnType.ConvertToWrapper($"{target.GetMemberTarget(method)}.{method.Name}({string.Join(", ", parameters.Select(x => x.marshal.ConvertToManaged(x.name)))})")}};
                                 }
 
                         """);
@@ -147,8 +152,8 @@ namespace WinRTWrapper.SourceGenerators
                         ImmutableArray<(MarshalType marshal, string name)> parameters = [.. property.Parameters.Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type), x.Name))];
                         _ = builder.AppendLine(
                             $$"""
-                                    /// <inheritdoc cref="{{property.GetDocumentationCommentId()}}"/>
-                                    public {{returnType.WrapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} this[{{string.Join(" ", parameters.Select(x => $"{x.marshal.WrapperType.ToDisplayString()} {x.name}"))}}]
+                                    /// <inheritdoc cref="{{property.GetConstructedFromDocumentationCommentId()}}"/>
+                                    public {{returnType.WrapperTypeName}} this[{{string.Join(" ", parameters.Select(x => $"{x.marshal.WrapperTypeName} {x.name}"))}}]
                                     {
                                         get
                                         {
@@ -177,12 +182,12 @@ namespace WinRTWrapper.SourceGenerators
                     MarshalType marshal = GetWrapperType(property.GetAttributes(), marshals, property.Type);
                     _ = builder.AppendLine(
                         $$"""
-                                /// <inheritdoc cref="{{property.GetDocumentationCommentId()}}"/>
-                                {{GetMemberModify(property)}}{{marshal.WrapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} {{property.Name}}
+                                /// <inheritdoc cref="{{property.GetConstructedFromDocumentationCommentId()}}"/>
+                                {{property.GetMemberModify()}}{{marshal.WrapperTypeName}} {{property.Name}}
                                 {
                                     get
                                     {
-                                        return {{marshal.ConvertToWrapper($"{GetMemberTarget(target, property)}.{property.Name}")}};
+                                        return {{marshal.ConvertToWrapper($"{target.GetMemberTarget(property)}.{property.Name}")}};
                                     }
                         """);
                     if (!property.IsReadOnly)
@@ -192,7 +197,7 @@ namespace WinRTWrapper.SourceGenerators
                             
                                         set
                                         {
-                                            {{GetMemberTarget(target, property)}}.{{property.Name}} = {{marshal.ConvertToManaged("value")}};
+                                            {{target.GetMemberTarget(property)}}.{{property.Name}} = {{marshal.ConvertToManaged("value")}};
                                         }
                             """);
                     }
@@ -231,14 +236,14 @@ namespace WinRTWrapper.SourceGenerators
                                 /// The event registration token table for the <see cref="{{symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}.{{@event.Name}}"/> event.
                                 /// </summary>
                                 private {{(@event.IsStatic ? "static " : string.Empty)}}readonly global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationTokenTable<{{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}> _{{@event.Name}}_EventTable = new global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationTokenTable<{{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}>();
-                                /// <inheritdoc cref="{{@event.GetDocumentationCommentId()}}"/>
-                                {{GetMemberModify(@event)}}event {{marshal.WrapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} {{@event.Name}}
+                                /// <inheritdoc cref="{{@event.GetConstructedFromDocumentationCommentId()}}"/>
+                                {{@event.GetMemberModify()}}event {{marshal.WrapperTypeName}} {{@event.Name}}
                                 {
                                     add
                                     {
                                         if (!_is_{{@event.Name}}_EventRegistered)
                                         {
-                                            {{GetMemberTarget(target, @event)}}.{{@event.Name}} += delegate ({{string.Join(", ", invoke.Parameters.Select(x => x.ToDisplayString()))}}) 
+                                            {{target.GetMemberTarget(@event)}}.{{@event.Name}} += delegate ({{string.Join(", ", invoke.Parameters.Select(x => x.ToDisplayString()))}}) 
                                             {
                                                 {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} @event = _{{@event.Name}}_EventTable.InvocationList;
                                                 if (@event != null)
@@ -265,14 +270,14 @@ namespace WinRTWrapper.SourceGenerators
                                 /// <summary>
                                 /// The event weak table for the <see cref="{{symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}.{{@event.Name}}"/> event.
                                 /// </summary>
-                                private {{(@event.IsStatic ? "static " : string.Empty)}}readonly global::System.Runtime.CompilerServices.ConditionalWeakTable<{{marshal.WrapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}, {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}> _{{@event.Name}}_EventWeakTable = new global::System.Runtime.CompilerServices.ConditionalWeakTable<{{marshal.WrapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}, {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}>();
-                                /// <inheritdoc cref="{{@event.GetDocumentationCommentId()}}"/>
-                                {{GetMemberModify(@event)}}event {{marshal.WrapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} {{@event.Name}}
+                                private {{(@event.IsStatic ? "static " : string.Empty)}}readonly global::System.Runtime.CompilerServices.ConditionalWeakTable<{{marshal.WrapperTypeName}}, {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}> _{{@event.Name}}_EventWeakTable = new global::System.Runtime.CompilerServices.ConditionalWeakTable<{{marshal.WrapperTypeName}}, {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}>();
+                                /// <inheritdoc cref="{{@event.GetConstructedFromDocumentationCommentId()}}"/>
+                                {{@event.GetMemberModify()}}event {{marshal.WrapperTypeName}} {{@event.Name}}
                                 {
                                     add
                                     {
                                         {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} handle = {{marshal.ConvertToManaged("value")}};
-                                        {{GetMemberTarget(target, @event)}}.{{@event.Name}} += handle;
+                                        {{target.GetMemberTarget(@event)}}.{{@event.Name}} += handle;
                                         _{{@event.Name}}_EventWeakTable.Add(value, handle);
                                     }
                                     remove
@@ -280,7 +285,7 @@ namespace WinRTWrapper.SourceGenerators
                                         {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} handle;
                                         if (_{{@event.Name}}_EventWeakTable.TryGetValue(value, out handle))
                                         {
-                                            {{GetMemberTarget(target, @event)}}.{{@event.Name}} -= handle;
+                                            {{target.GetMemberTarget(@event)}}.{{@event.Name}} -= handle;
                                             _{{@event.Name}}_EventWeakTable.Remove(value);
                                         }
                                     }
@@ -299,14 +304,14 @@ namespace WinRTWrapper.SourceGenerators
                                 /// The event registration token table for the <see cref="{{symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}.{{@event.Name}}"/> event.
                                 /// </summary>
                                 private {{(@event.IsStatic ? "static " : string.Empty)}}readonly global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationTokenTable<{{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}> _{{@event.Name}}_EventTable = new global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationTokenTable<{{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}>();
-                                /// <inheritdoc cref="{{@event.GetDocumentationCommentId()}}"/>
-                                {{GetMemberModify(@event)}}event {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} {{@event.Name}}
+                                /// <inheritdoc cref="{{@event.GetConstructedFromDocumentationCommentId()}}"/>
+                                {{@event.GetMemberModify()}}event {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} {{@event.Name}}
                                 {
                                     add
                                     {
                                         if (!_is_{{@event.Name}}_EventRegistered)
                                         {
-                                            {{GetMemberTarget(target, @event)}}.{{@event.Name}} += delegate ({{string.Join(", ", invoke.Parameters.Select(x => x.ToDisplayString()))}}) 
+                                            {{target.GetMemberTarget(@event)}}.{{@event.Name}} += delegate ({{string.Join(", ", invoke.Parameters.Select(x => x.ToDisplayString()))}}) 
                                             {
                                                 {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} @event = _{{@event.Name}}_EventTable.InvocationList;
                                                 if (@event != null)
@@ -330,16 +335,16 @@ namespace WinRTWrapper.SourceGenerators
                 case ({ IsWinMDObject: false }, { HasConversion: false }):
                     _ = builder.AppendLine(
                         $$"""
-                                /// <inheritdoc cref="{{@event.GetDocumentationCommentId()}}"/>
-                                {{GetMemberModify(@event)}}event {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} {{@event.Name}}
+                                /// <inheritdoc cref="{{@event.GetConstructedFromDocumentationCommentId()}}"/>
+                                {{@event.GetMemberModify()}}event {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} {{@event.Name}}
                                 {
                                     add
                                     {
-                                        {{GetMemberTarget(target, @event)}}.{{@event.Name}} += value;
+                                        {{target.GetMemberTarget(@event)}}.{{@event.Name}} += value;
                                     }
                                     remove
                                     {
-                                        {{GetMemberTarget(target, @event)}}.{{@event.Name}} -= value;
+                                        {{target.GetMemberTarget(@event)}}.{{@event.Name}} -= value;
                                     }
                                 }
 
@@ -348,25 +353,6 @@ namespace WinRTWrapper.SourceGenerators
             }
             return builder;
         }
-
-        /// <summary>
-        /// Gets the <typeparamref name="T"/> member's modification string based on whether it is static or instance.
-        /// </summary>
-        /// <typeparam name="T">The type of the member.</typeparam>
-        /// <param name="member">The member symbol.</param>
-        /// <returns>The member's modification string.</returns>
-        private static string GetMemberModify<T>(T member) where T : ISymbol =>
-            $"public {(member.IsStatic ? "static " : string.Empty)}";
-
-        /// <summary>
-        /// Gets the target <typeparamref name="T"/> member's name based on whether it is static or instance.
-        /// </summary>
-        /// <typeparam name="T">The type of the member.</typeparam>
-        /// <param name="target">The target type symbol.</param>
-        /// <param name="member">The member symbol.</param>
-        /// <returns>The member's target name.</returns>
-        private static string GetMemberTarget<T>(INamedTypeSymbol target, T member) where T : ISymbol =>
-            member.IsStatic ? target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) : $"this.{nameof(target)}";
 
         /// <summary>
         /// Gets the wrapper type for a given <paramref name="original"/> type based on its attributes.
@@ -387,7 +373,7 @@ namespace WinRTWrapper.SourceGenerators
                         x.AttributeClass is { Name: nameof(WinRTWrapperMarshallerAttribute) }
                         && x.AttributeClass.ContainingNamespace.ToDisplayString() == namespaceName)
                         is { ConstructorArguments: [{ Kind: TypedConstantKind.Type, Value: INamedTypeSymbol managed }, { Kind: TypedConstantKind.Type, Value: INamedTypeSymbol wrapper }] }
-                        && managed.Equals(original, SymbolEqualityComparer.Default))
+                        && original.IsSubclassOf(managed))
                     {
                         marshal = new MarshalType(
                             managed,
@@ -403,8 +389,12 @@ namespace WinRTWrapper.SourceGenerators
 
             static bool GetMarshalType(ImmutableArray<MarshalType> marshals, ITypeSymbol original, [NotNullWhen(true)] out MarshalType? marshal)
             {
-                if (marshals.FirstOrDefault(x => x.ManagedType.Equals(original, SymbolEqualityComparer.Default) == true) is MarshalType marshier)
+                if (marshals.FirstOrDefault(x => original.IsSubclassOf(x.ManagedType)) is MarshalType marshier)
                 {
+                    if (marshier is MarshalGenericType generic && original is INamedTypeSymbol symbol)
+                    {
+                        generic.GenericArguments = symbol.TypeArguments;
+                    }
                     marshal = marshier;
                     return true;
                 }

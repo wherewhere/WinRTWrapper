@@ -27,6 +27,19 @@ namespace WinRTWrapper.SourceGenerators
 
         private static IEnumerable<MarshalType> CreateMarshallers(Compilation compilation)
         {
+            if (compilation.GetAccessibleTypeWithMetadataName("System.Threading.Tasks.Task`1", out INamedTypeSymbol? taskOfT))
+            {
+                if (compilation.GetAccessibleTypeWithMetadataName("Windows.Foundation.IAsyncOperation`1", out INamedTypeSymbol? namedTypeSymbol))
+                {
+                    yield return new MarshalGenericType(
+                        taskOfT,
+                        namedTypeSymbol,
+                        inner => $"global::System.WindowsRuntimeSystemExtensions.AsAsyncOperation(({inner}))",
+                        inner => $"global::System.WindowsRuntimeSystemExtensions.AsTask(({inner}))",
+                        taskOfT.TypeArguments);
+                }
+            }
+
             if (compilation.GetAccessibleTypeWithMetadataName("System.Threading.Tasks.Task", out INamedTypeSymbol? task))
             {
                 if (compilation.GetAccessibleTypeWithMetadataName("Windows.Foundation.IAsyncAction", out INamedTypeSymbol? asyncAction))
@@ -34,8 +47,8 @@ namespace WinRTWrapper.SourceGenerators
                     yield return new MarshalType(
                         task,
                         asyncAction,
-                        inner => $"global::System.WindowsRuntimeSystemExtensions.AsAsyncAction({inner})",
-                        inner => $"global::System.WindowsRuntimeSystemExtensions.AsTask({inner})");
+                        static inner => $"global::System.WindowsRuntimeSystemExtensions.AsAsyncAction({inner})",
+                        static inner => $"global::System.WindowsRuntimeSystemExtensions.AsTask({inner})");
                 }
             }
 
@@ -46,8 +59,8 @@ namespace WinRTWrapper.SourceGenerators
                     yield return new MarshalType(
                         stream,
                         randomAccessStream,
-                        inner => $"global::System.IO.WindowsRuntimeStreamExtensions.AsRandomAccessStream({inner})",
-                        inner => $"global::System.IO.WindowsRuntimeStreamExtensions.AsStream({inner})");
+                        static inner => $"global::System.IO.WindowsRuntimeStreamExtensions.AsRandomAccessStream({inner})",
+                        static inner => $"global::System.IO.WindowsRuntimeStreamExtensions.AsStream({inner})");
                 }
 
                 if (compilation.GetAccessibleTypeWithMetadataName("Windows.Storage.Streams.IOutputStream", out INamedTypeSymbol? outputStream))
@@ -55,8 +68,8 @@ namespace WinRTWrapper.SourceGenerators
                     yield return new MarshalType(
                         stream,
                         outputStream,
-                        inner => $"global::System.IO.WindowsRuntimeStreamExtensions.AsOutputStream({inner})",
-                        inner => $"global::System.IO.WindowsRuntimeStreamExtensions.AsStreamForWrite({inner})");
+                        static inner => $"global::System.IO.WindowsRuntimeStreamExtensions.AsOutputStream({inner})",
+                        static inner => $"global::System.IO.WindowsRuntimeStreamExtensions.AsStreamForWrite({inner})");
                 }
 
                 if (compilation.GetAccessibleTypeWithMetadataName("Windows.Storage.Streams.IInputStream", out INamedTypeSymbol? inputStream))
@@ -64,8 +77,8 @@ namespace WinRTWrapper.SourceGenerators
                     yield return new MarshalType(
                         stream,
                         inputStream,
-                        inner => $"global::System.IO.WindowsRuntimeStreamExtensions.AsInputStream({inner})",
-                        inner => $"global::System.IO.WindowsRuntimeStreamExtensions.AsStreamForRead({inner})");
+                        static inner => $"global::System.IO.WindowsRuntimeStreamExtensions.AsInputStream({inner})",
+                        static inner => $"global::System.IO.WindowsRuntimeStreamExtensions.AsStreamForRead({inner})");
                 }
             }
 
@@ -76,8 +89,8 @@ namespace WinRTWrapper.SourceGenerators
                     yield return new MarshalType(
                         point,
                         _point,
-                        inner => $"new global::Windows.Foundation.Point(({inner}).X, ({inner}).Y)",
-                        inner => $"new global::System.Drawing.PointF((float)({inner}).X, (float)({inner}).Y)");
+                        static inner => $"new global::Windows.Foundation.Point(({inner}).X, ({inner}).Y)",
+                        static inner => $"new global::System.Drawing.PointF((float)({inner}).X, (float)({inner}).Y)");
                 }
             }
 
@@ -88,8 +101,8 @@ namespace WinRTWrapper.SourceGenerators
                     yield return new MarshalType(
                         size,
                         _size,
-                        inner => $"new global::Windows.Foundation.Size(({inner}).Width, ({inner}).Height)",
-                        inner => $"new global::System.Drawing.SizeF((float)({inner}).Width, (float)({inner}).Height)");
+                        static inner => $"new global::Windows.Foundation.Size(({inner}).Width, ({inner}).Height)",
+                        static inner => $"new global::System.Drawing.SizeF((float)({inner}).Width, (float)({inner}).Height)");
                 }
             }
 
@@ -100,8 +113,8 @@ namespace WinRTWrapper.SourceGenerators
                     yield return new MarshalType(
                         rectangle,
                         rect,
-                        inner => $"new global::Windows.Foundation.Rect(({inner}).X, ({inner}).Y, ({inner}).Width, ({inner}).Height)",
-                        inner => $"new global::System.Drawing.RectangleF((float)({inner}).X, (float)({inner}).Y, (float)({inner}).Width, (float)({inner}).Height)");
+                        static inner => $"new global::Windows.Foundation.Rect(({inner}).X, ({inner}).Y, ({inner}).Width, ({inner}).Height)",
+                        static inner => $"new global::System.Drawing.RectangleF((float)({inner}).X, (float)({inner}).Y, (float)({inner}).Width, (float)({inner}).Height)");
                 }
             }
         }
