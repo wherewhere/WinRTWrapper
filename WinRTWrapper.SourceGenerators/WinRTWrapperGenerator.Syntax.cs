@@ -21,7 +21,7 @@ namespace WinRTWrapper.SourceGenerators
             (INamedTypeSymbol symbol, INamedTypeSymbol target) = source;
             if (!target.IsStatic)
             {
-                _ = builder.AppendLine(
+                _ = builder.AppendLine(handler:
                     $$"""
                             /// <summary>
                             /// The target <see cref="{{target.GetConstructedFromDocumentationCommentId()}}"/> object of the wrapper.
@@ -44,7 +44,7 @@ namespace WinRTWrapper.SourceGenerators
                 {
                     if (attribute.ConstructorArguments is [{ Kind: TypedConstantKind.Type, Value: INamedTypeSymbol managedType }, { Kind: TypedConstantKind.Type, Value: INamedTypeSymbol wrapperType }])
                     {
-                        _ = builder.AppendLine(
+                        _ = builder.AppendLine(handler:
                             $$"""
                                     /// <summary>
                                     /// Converts a managed type <see cref="{{managedType.GetConstructedFromDocumentationCommentId()}}"/> to a wrapper type <see cref="{{wrapperType.GetConstructedFromDocumentationCommentId()}}"/>.
@@ -86,7 +86,7 @@ namespace WinRTWrapper.SourceGenerators
             switch (method)
             {
                 case { MethodKind: MethodKind.Constructor }:
-                    _ = builder.AppendLine(
+                    _ = builder.AppendLine(handler:
                         $$"""
                                 /// <inheritdoc cref="{{method.GetConstructedFromDocumentationCommentId()}}"/>
                                 public {{symbol.Name}}({{string.Join(" ", method.Parameters.Select(x => x.ToDisplayString()))}})
@@ -107,7 +107,7 @@ namespace WinRTWrapper.SourceGenerators
                 case { MethodKind: MethodKind.Ordinary }:
                     MarshalType returnType = GetWrapperType(method.GetReturnTypeAttributes(), marshals, method.ReturnType);
                     ImmutableArray<(MarshalType marshal, string name)> parameters = [.. method.Parameters.Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type), x.Name))];
-                    _ = builder.AppendLine(
+                    _ = builder.AppendLine(handler:
                         $$"""
                                 /// <inheritdoc cref="{{method.GetConstructedFromDocumentationCommentId()}}"/>
                                 {{method.GetMemberModify()}}{{returnType.WrapperTypeName}} {{method.Name}}({{string.Join(" ", parameters.Select(x => $"{x.marshal.WrapperTypeName} {x.name}"))}})
@@ -150,7 +150,7 @@ namespace WinRTWrapper.SourceGenerators
                     {
                         MarshalType returnType = GetWrapperType(property.GetAttributes(), marshals, property.Type);
                         ImmutableArray<(MarshalType marshal, string name)> parameters = [.. property.Parameters.Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type), x.Name))];
-                        _ = builder.AppendLine(
+                        _ = builder.AppendLine(handler:
                             $$"""
                                     /// <inheritdoc cref="{{property.GetConstructedFromDocumentationCommentId()}}"/>
                                     public {{returnType.WrapperTypeName}} this[{{string.Join(" ", parameters.Select(x => $"{x.marshal.WrapperTypeName} {x.name}"))}}]
@@ -162,7 +162,7 @@ namespace WinRTWrapper.SourceGenerators
                             """);
                         if (!property.IsReadOnly)
                         {
-                            _ = builder.AppendLine(
+                            _ = builder.AppendLine(handler:
                                 $$"""
                                             set
                                             {
@@ -180,7 +180,7 @@ namespace WinRTWrapper.SourceGenerators
                     return builder;
                 default:
                     MarshalType marshal = GetWrapperType(property.GetAttributes(), marshals, property.Type);
-                    _ = builder.AppendLine(
+                    _ = builder.AppendLine(handler:
                         $$"""
                                 /// <inheritdoc cref="{{property.GetConstructedFromDocumentationCommentId()}}"/>
                                 {{property.GetMemberModify()}}{{marshal.WrapperTypeName}} {{property.Name}}
@@ -192,7 +192,7 @@ namespace WinRTWrapper.SourceGenerators
                         """);
                     if (!property.IsReadOnly)
                     {
-                        _ = builder.AppendLine(
+                        _ = builder.AppendLine(handler:
                             $$"""
                             
                                         set
@@ -226,7 +226,7 @@ namespace WinRTWrapper.SourceGenerators
             switch ((options, marshal))
             {
                 case ({ IsWinMDObject: true }, { HasConversion: true }):
-                    _ = builder.AppendLine(
+                    _ = builder.AppendLine(handler:
                         $$"""
                                 /// <summary>
                                 /// The singleton flag for the <see cref="{{symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}.{{@event.Name}}"/> event registration.
@@ -265,7 +265,7 @@ namespace WinRTWrapper.SourceGenerators
                         """);
                     break;
                 case ({ IsWinMDObject: false }, { HasConversion: true }):
-                    _ = builder.AppendLine(
+                    _ = builder.AppendLine(handler:
                         $$"""
                                 /// <summary>
                                 /// The event weak table for the <see cref="{{symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}.{{@event.Name}}"/> event.
@@ -294,7 +294,7 @@ namespace WinRTWrapper.SourceGenerators
                         """);
                     break;
                 case ({ IsWinMDObject: true }, { HasConversion: false }):
-                    _ = builder.AppendLine(
+                    _ = builder.AppendLine(handler:
                         $$"""
                                 /// <summary>
                                 /// The singleton flag for the <see cref="{{symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}.{{@event.Name}}"/> event registration.
@@ -333,7 +333,7 @@ namespace WinRTWrapper.SourceGenerators
                         """);
                     break;
                 case ({ IsWinMDObject: false }, { HasConversion: false }):
-                    _ = builder.AppendLine(
+                    _ = builder.AppendLine(handler:
                         $$"""
                                 /// <inheritdoc cref="{{@event.GetConstructedFromDocumentationCommentId()}}"/>
                                 {{@event.GetMemberModify()}}event {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} {{@event.Name}}

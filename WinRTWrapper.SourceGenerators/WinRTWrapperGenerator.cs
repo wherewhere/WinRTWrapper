@@ -86,7 +86,7 @@ namespace WinRTWrapper.SourceGenerators
 
             if (needConstructor == true)
             {
-                _ = builder.Append(
+                _ = builder.Append(handler:
                     $$"""
                             /// Initializes a new instance of the <see cref="{{symbol.GetDocumentationCommentId()}}"/> class.
                             internal {{symbol.Name}}() { }

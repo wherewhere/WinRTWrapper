@@ -14,7 +14,9 @@
       System.Diagnostics.CodeAnalysis.NotNullWhenAttribute;
       System.Diagnostics.CodeAnalysis.UnscopedRefAttribute;
       System.Index;
-      System.Runtime.CompilerServices.IsExternalInit
+      System.Runtime.CompilerServices.IsExternalInit;
+      System.Runtime.CompilerServices.InterpolatedStringHandlerArgumentAttribute;
+      System.Runtime.CompilerServices.InterpolatedStringHandlerAttribute
     </PolySharpIncludeGeneratedTypes>
   </PropertyGroup>
 
