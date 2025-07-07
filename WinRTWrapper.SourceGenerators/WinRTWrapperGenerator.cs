@@ -5,6 +5,7 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using WinRTWrapper.SourceGenerators.Extensions;
 using WinRTWrapper.SourceGenerators.Models;
 
 namespace WinRTWrapper.SourceGenerators
@@ -68,18 +69,18 @@ namespace WinRTWrapper.SourceGenerators
             (INamedTypeSymbol symbol, INamedTypeSymbol target, _, _) = source!;
             StringBuilder builder = InitBuilder((symbol, target));
             bool? needConstructor = null;
-            foreach (ISymbol member in GetMembers(source))
+            foreach (ISymbolWrapper member in GetMembers(source, options.Marshals))
             {
                 switch (member)
                 {
-                    case IMethodSymbol method:
-                        _ = AddMethod((symbol, target), method, builder, options.Marshals, ref needConstructor);
+                    case SymbolWrapper<IMethodSymbol> method:
+                        _ = AddMethod(method, builder, options.Marshals, ref needConstructor);
                         break;
-                    case IPropertySymbol property:
-                        _ = AddProperty((symbol, target), property, builder, options.Marshals);
+                    case SymbolWrapper<IPropertySymbol> property:
+                        _ = AddProperty(property, builder, options.Marshals);
                         break;
-                    case IEventSymbol @event:
-                        _ = AddEvent((symbol, target), @event, builder, options);
+                    case SymbolWrapper<IEventSymbol> @event:
+                        _ = AddEvent(@event, builder, options);
                         break;
                 }
             }
@@ -109,44 +110,176 @@ namespace WinRTWrapper.SourceGenerators
             context.AddSource($"{symbol.Name}.g.cs", generatedCode);
         }
 
-        private static IEnumerable<ISymbol> GetMembers(WrapperType source)
+        private static IEnumerable<ISymbolWrapper> GetMembers(WrapperType source, ImmutableArray<MarshalType> marshals)
         {
             (INamedTypeSymbol symbol, INamedTypeSymbol target, GenerateMember member, ImmutableArray<INamedTypeSymbol> interfaces) = source;
             switch (member)
             {
-                case SourceGenerators.GenerateMember.None:
-                    yield break;
                 case SourceGenerators.GenerateMember.All:
+                    static IEnumerable<ISymbolWrapper> GetISymbolWrappers(INamedTypeSymbol symbol, INamedTypeSymbol target, ImmutableArray<MarshalType> marshals)
                     {
                         foreach (ISymbol item in target.GetMembers())
                         {
                             if (item.DeclaredAccessibility == Accessibility.Public)
                             {
-                                yield return item;
+                                if (symbol.GetMembers().FirstOrDefault(x => IsSameMember(x, item, marshals)) is ISymbol wrapper)
+                                {
+                                    if (IsPartialMember(wrapper))
+                                    {
+                                        yield return SymbolWrapper.Create(wrapper, item);
+                                    }
+                                    else
+                                    {
+                                        continue;
+                                    }
+                                }
+                                yield return SymbolWrapper.Create(symbol, item);
                             }
                         }
-
-                        break;
                     }
+                    return GetISymbolWrappers(symbol, target, marshals);
+                case SourceGenerators.GenerateMember.Defined:
+                    return from wrapper in symbol.GetMembers().Where(IsPartialMember)
+                           from traget in target.GetMembers().Where(x => x.DeclaredAccessibility == Accessibility.Public)
+                           where IsSameMember(wrapper, traget, marshals)
+                           select SymbolWrapper.Create(wrapper, traget);
+                case SourceGenerators.GenerateMember.Interface:
+                    return from wrapper in (interfaces.Length > 0 ? interfaces : symbol.Interfaces).SelectMany(x => x.GetMembers())
+                           from traget in target.GetMembers().Where(x => x.DeclaredAccessibility == Accessibility.Public)
+                           where IsSameMember(wrapper, traget, marshals)
+                           select SymbolWrapper.Create(wrapper, traget);
+                case SourceGenerators.GenerateMember.Defined | SourceGenerators.GenerateMember.Interface:
+                    return from wrapper in symbol.GetMembers().Where(IsPartialMember).Concat((interfaces.Length > 0 ? interfaces : symbol.Interfaces).SelectMany(x => x.GetMembers()))
+                           from traget in target.GetMembers().Where(x => x.DeclaredAccessibility == Accessibility.Public)
+                           where IsSameMember(wrapper, traget, marshals)
+                           select SymbolWrapper.Create(wrapper, traget);
+                case SourceGenerators.GenerateMember.None:
                 default:
-                    List<ISymbol> members = [..(member switch
-                    {
-                        SourceGenerators.GenerateMember.Defined => symbol.GetMembers(),
-                        SourceGenerators.GenerateMember.Interface => (interfaces.Length > 0 ? interfaces : symbol.Interfaces).SelectMany(x => x.GetMembers()),
-                        SourceGenerators.GenerateMember.Defined | SourceGenerators.GenerateMember.Interface => (interfaces.Length > 0 ? interfaces : symbol.Interfaces).SelectMany(x => x.GetMembers()).Concat(symbol.GetMembers()),
-                        _ => []
-                    }).Where(x => x.DeclaredAccessibility == Accessibility.Public)];
-                    foreach (ISymbol item in target.GetMembers())
-                    {
-                        if (item.DeclaredAccessibility == Accessibility.Public)
+                    return [];
+            }
+
+            static bool IsPartialMember(ISymbol member)
+            {
+                return member switch
+                {
+                    IMethodSymbol method => method.IsPartialDefinition,
+                    IPropertySymbol property => property.GetMethod?.IsPartialDefinition == true || property.SetMethod?.IsPartialDefinition == true,
+                    IEventSymbol @event => @event.AddMethod?.IsPartialDefinition == true || @event.RemoveMethod?.IsPartialDefinition == true,
+                    _ => false
+                };
+            }
+
+            static bool IsSameMember(ISymbol wrapper, ISymbol target, ImmutableArray<MarshalType> marshals)
+            {
+                switch (wrapper, target)
+                {
+                    case (IMethodSymbol w, IMethodSymbol t):
+                        if (w.IsStatic == t.IsStatic && w.MethodKind == t.MethodKind && w.Name == t.Name && w.Parameters.Length == t.Parameters.Length)
                         {
-                            if (members.Exists(x => x.IsStatic == item.IsStatic && x.Kind == item.Kind && x.Name == item.Name))
+                            if (!w.ReturnType.Equals(t.ReturnType, SymbolEqualityComparer.Default))
                             {
-                                yield return item;
+                                if (!IsWrapperType([.. w.GetReturnTypeAttributes(), .. t.GetReturnTypeAttributes()], marshals, t.ReturnType, w.ReturnType))
+                                {
+                                    return false;
+                                }
                             }
+                            for (int i = 0; i < w.Parameters.Length; i++)
+                            {
+                                IParameterSymbol wrapperParam = w.Parameters[i];
+                                IParameterSymbol targetParam = t.Parameters[i];
+                                if (!wrapperParam.Type.Equals(targetParam.Type, SymbolEqualityComparer.Default))
+                                {
+                                    if (!IsWrapperType([.. wrapperParam.GetAttributes(), .. targetParam.GetAttributes()], marshals, targetParam.Type, wrapperParam.Type))
+                                    {
+                                        return false;
+                                    }
+                                }
+                            }
+                            return true;
+                        }
+                        return false;
+                    case (IPropertySymbol w, IPropertySymbol t):
+                        if (w.IsStatic == t.IsStatic && w.Name == t.Name)
+                        {
+                            if (!w.Type.Equals(t.Type, SymbolEqualityComparer.Default))
+                            {
+                                if (!IsWrapperType([.. w.GetAttributes(), .. t.GetAttributes()], marshals, t.Type, w.Type))
+                                {
+                                    return false;
+                                }
+                            }
+                            return true;
+                        }
+                        return false;
+                    case (IEventSymbol w, IEventSymbol t):
+                        if (w.IsStatic == t.IsStatic && w.Name == t.Name)
+                        {
+                            if (!w.Type.Equals(t.Type, SymbolEqualityComparer.Default))
+                            {
+                                if (!IsWrapperType([.. w.GetAttributes(), .. t.GetAttributes()], marshals, t.Type, w.Type))
+                                {
+                                    return false;
+                                }
+                            }
+                            return true;
+                        }
+                        return false;
+                    default:
+                        return false;
+                }
+            }
+
+            static bool IsWrapperType(IEnumerable<AttributeData> attributes, ImmutableArray<MarshalType> marshals, ITypeSymbol original, ITypeSymbol? expect = null)
+            {
+                static bool IsWrapperType(IEnumerable<AttributeData> attributes, string name, ITypeSymbol original, ITypeSymbol? expect)
+                {
+                    if (attributes.FirstOrDefault(x =>
+                        x.AttributeClass?.Name == name
+                        && x.AttributeClass.ContainingNamespace.ToDisplayString() == namespaceName)
+                        is { ConstructorArguments: [{ Kind: TypedConstantKind.Type, Value: INamedTypeSymbol marshaller }] })
+                    {
+                        if (marshaller.GetAttributes().FirstOrDefault(x =>
+                            x.AttributeClass is { Name: nameof(WinRTWrapperMarshallerAttribute) }
+                            && x.AttributeClass.ContainingNamespace.ToDisplayString() == namespaceName)
+                            is { ConstructorArguments: [{ Kind: TypedConstantKind.Type, Value: INamedTypeSymbol managed }, { Kind: TypedConstantKind.Type, Value: INamedTypeSymbol wrapper }] }
+                            && original.IsSubclassOf(managed) && expect?.IsSubclassOf(wrapper) != false)
+                        {
+                            return true;
                         }
                     }
-                    break;
+                    return false;
+                }
+
+                static bool IsWrapper(ITypeSymbol original, ITypeSymbol expect)
+                {
+                    if (expect.GetAttributes().FirstOrDefault(x =>
+                        x.AttributeClass is { Name: nameof(WinRTWrapperMarshallerAttribute) }
+                        && x.AttributeClass.ContainingNamespace.ToDisplayString() == namespaceName)
+                        is { ConstructorArguments: [{ Kind: TypedConstantKind.Type, Value: INamedTypeSymbol managed }, { Kind: TypedConstantKind.Type, Value: INamedTypeSymbol wrapper }] }
+                        && original.IsSubclassOf(managed) && expect.IsSubclassOf(wrapper) != false)
+                    {
+                        return true;
+                    }
+                    return false;
+                }
+
+                static bool IsMarshalType(ImmutableArray<MarshalType> marshals, ITypeSymbol original, ITypeSymbol? expect)
+                {
+                    if (marshals.FirstOrDefault(x => original.IsSubclassOf(x.ManagedType) && expect?.IsSubclassOf(x.WrapperType) != false) is MarshalType marshier)
+                    {
+                        if (marshier is MarshalGenericType generic && original is INamedTypeSymbol symbol)
+                        {
+                            generic.GenericArguments = symbol.TypeArguments;
+                        }
+                        return true;
+                    }
+                    return false;
+                }
+
+                return IsWrapperType(attributes, nameof(WinRTWrapperMarshalUsingAttribute), original, expect)
+                    || IsWrapperType(original.GetAttributes(), nameof(WinRTWrapperMarshallingAttribute), original, expect)
+                    || expect != null && IsWrapper(original, expect)
+                    || IsMarshalType(marshals, original, expect);
             }
         }
     }

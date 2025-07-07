@@ -1,13 +1,23 @@
 ﻿using Microsoft.CodeAnalysis;
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 
 namespace WinRTWrapper.SourceGenerators.Extensions
 {
     internal static class SymbolExtensions
     {
+        public static string FormatToString(this Accessibility accessibility) => accessibility switch
+        {
+            Accessibility.NotApplicable => string.Empty,
+            Accessibility.Private => "private",
+            Accessibility.ProtectedAndInternal or Accessibility.ProtectedAndFriend => "private protected",
+            Accessibility.Protected => "protected",
+            Accessibility.Internal or Accessibility.Friend => "internal",
+            Accessibility.ProtectedOrInternal or Accessibility.ProtectedOrFriend => "protected internal",
+            Accessibility.Public => "public",
+            _ => throw new ArgumentOutOfRangeException(nameof(accessibility), accessibility, null),
+        };
+
         /// <summary>
         /// Gets the <typeparamref name="T"/> member's modification string based on whether it is static or instance.
         /// </summary>

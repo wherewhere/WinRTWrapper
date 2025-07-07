@@ -394,8 +394,17 @@ namespace WinRTWrapper.Test
         }
     }
 
+    /// <summary>
+    /// Delegate <see cref="DelegateSimple"/> is a delegate that takes a <see cref="GenericSimpleWrapper"/> argument and returns a <see cref="SimpleWrapper"/>.
+    /// </summary>
+    /// <param name="arg">The argument of type <see cref="GenericSimpleWrapper"/>.</param>
+    /// <returns>The result of type <see cref="SimpleWrapper"/>.</returns>
+    [WinRTWrapperMarshalling(typeof(DelegateSimpleMarshaller))]
     public delegate SimpleWrapper DelegateSimple(GenericSimpleWrapper arg);
 
+    /// <summary>
+    /// Interface <see cref="I"/> defines a contract for a simple interface with properties, methods, and events.
+    /// </summary>
     public interface I
     {
         /// <summary>
@@ -430,7 +439,11 @@ namespace WinRTWrapper.Test
 #else
     [WinRTWrapperMarshaller(typeof(Simple), typeof(I))]
 #endif
+#if NET
+    [GenerateWinRTWrapper(typeof(Simple), typeof(I))]
+#else
     [GenerateWinRTWrapper(typeof(Simple), GenerateMember.Interface)]
+#endif
     public sealed partial class SimpleWrapper
 #if NET
         { }
@@ -445,6 +458,17 @@ namespace WinRTWrapper.Test
     [WinRTWrapperMarshaller(typeof(StaticSimple), typeof(StaticSimpleWrapper))]
     [GenerateWinRTWrapper(typeof(StaticSimple))]
     public static partial class StaticSimpleWrapper { }
+
+    [WinRTWrapperMarshaller(typeof(Simple), typeof(DefinedSimpleWrapper))]
+    [GenerateWinRTWrapper(typeof(Simple), GenerateMember.Defined)]
+    public sealed partial class DefinedSimpleWrapper
+    {
+        public partial int Method();
+
+#if !NET
+        public static partial DefinedSimpleWrapper GetSelf(DefinedSimpleWrapper self);
+#endif
+    }
 
     [WinRTWrapperMarshaller(typeof(Func<GenericSimple<int>, Simple>), typeof(DelegateSimple))]
     internal class DelegateSimpleMarshaller

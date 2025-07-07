@@ -86,3 +86,96 @@ A wrapper source generator for WinRT
        }
    }
    ```
+
+## Advanced Usage
+### Generate Member
+You can specify which types of members to generate in the wrapper class by add parameters to the `GenerateWinRTWrapper` attribute. For example, `GenerateMember.Interface` will only generate interface members:
+
+```cs
+[GenerateWinRTWrapper(typeof(Simple), GenerateMember.Interface)]
+public sealed partial class SimpleWrapper : I;
+```
+
+`GenerateMember.Defined` will only generate members that are defined in the class:
+
+```cs
+[GenerateWinRTWrapper(typeof(Simple), GenerateMember.Defined)]
+public sealed partial class SimpleWrapper
+{
+    public partial int Method();
+
+    public static partial SimpleWrapper GetSelf(SimpleWrapper self);
+}
+```
+
+You can also specify interfaces which not implemented in the class as a filter:
+
+```cs
+[GenerateWinRTWrapper(typeof(Simple), typeof(I))]
+public sealed partial class SimpleWrapper;
+```
+
+### Marshaller
+You can define a custom marshaller for a specific type by `WinRTWrapperMarshaller` attribute. A marshaller should implement `ConvertToWrapper` and `ConvertToManaged` methods. For example:
+
+```cs
+[WinRTWrapperMarshaller(typeof(Simple), typeof(SimpleWrapper))]
+public sealed partial class SimpleWrapper
+{
+    /// <summary>
+    /// Converts a managed type <see cref="T:WinRTWrapper.Test.Simple"/> to a wrapper type <see cref="T:WinRTWrapper.Test.SimpleWrapper"/>.
+    /// </summary>
+    /// <param name="managed">The managed type to convert.</param>
+    /// <returns>The converted wrapper type.</returns>
+    internal static global::WinRTWrapper.Test.SimpleWrapper ConvertToWrapper(global::WinRTWrapper.Test.Simple managed)
+    {
+        return (global::WinRTWrapper.Test.SimpleWrapper)new global::WinRTWrapper.Test.SimpleWrapper(managed);
+    }
+
+    /// <summary>
+    /// Converts a wrapper type <see cref="T:WinRTWrapper.Test.SimpleWrapper"/> to a managed type <see cref="T:WinRTWrapper.Test.Simple"/>.
+    /// </summary>
+    /// <param name="wrapper">The wrapper type to convert.</param>
+    /// <returns>The converted managed type.</returns>
+    internal static global::WinRTWrapper.Test.Simple ConvertToManaged(global::WinRTWrapper.Test.SimpleWrapper wrapper)
+    {
+        return (global::WinRTWrapper.Test.Simple)((global::WinRTWrapper.Test.SimpleWrapper)wrapper).target;
+    }
+}
+```
+
+It will be generated automatically when both `WinRTWrapperMarshaller` and `GenerateWinRTWrapper` attributes are applied to the same class.
+
+Then you can use the `WinRTWrapperMarshalUsing` attribute to specify the marshaller for a method parameter or return value.
+
+You can apply it to the managed type:
+
+```cs
+/// <summary>
+/// Gets a new instance of the <see cref="Simple"/> class with the specified value.
+/// </summary>
+/// <param name="self">The value to initialize the instance with.</param>
+/// <returns>The new instance of <see cref="Simple"/>.</returns>
+[return: WinRTWrapperMarshalUsing(typeof(SimpleWrapper))]
+public static Simple GetSelf([WinRTWrapperMarshalUsing(typeof(SimpleWrapper))] Simple self)
+{
+    return self;
+}
+```
+
+Or you can apply it to the wrapper type:
+
+```cs
+[return: WinRTWrapperMarshalUsing(typeof(SimpleWrapper))]
+public static partial SimpleWrapper GetSelf([WinRTWrapperMarshalUsing(typeof(SimpleWrapper))] SimpleWrapper self);
+```
+
+You can also use the `WinRTWrapperMarshalling` attribute to specify the marshaller for a class.
+
+```cs
+[WinRTWrapperMarshalling(typeof(SimpleWrapper))]
+internal class Simple;
+```
+
+## Notice
+Since C#/WinRT is not IL/WinRT, you should define every members in the wrapper class. So that the C#/WinRT can generate the correct WinRT metadata for the wrapper class.
