@@ -2,6 +2,7 @@
 using Microsoft.CodeAnalysis.Diagnostics;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using WinRTWrapper.SourceGenerators.Constants;
 using WinRTWrapper.SourceGenerators.Extensions;
@@ -21,22 +22,38 @@ namespace WinRTWrapper.SourceGenerators
         {
             (AnalyzerConfigOptionsProvider options, Compilation compilation) = source;
             bool isWinMDObject = options.GetStringMSBuildProperty(MSBuildProperties.OutputType).Equals("winmdobj", StringComparison.OrdinalIgnoreCase);
+            bool isCSWinRT = compilation.ReferencedAssemblyNames.Any(x => x.Name.Equals("WinRT.Runtime", StringComparison.OrdinalIgnoreCase));
             IEnumerable<MarshalType> marshals = CreateMarshallers(compilation);
-            return new GenerationOptions(isWinMDObject, [.. marshals]);
+            return new GenerationOptions(isWinMDObject, isCSWinRT, [.. marshals]);
         }
 
         private static IEnumerable<MarshalType> CreateMarshallers(Compilation compilation)
         {
             if (compilation.GetAccessibleTypeWithMetadataName("System.Threading.Tasks.Task`1", out INamedTypeSymbol? taskOfT))
             {
-                if (compilation.GetAccessibleTypeWithMetadataName("Windows.Foundation.IAsyncOperation`1", out INamedTypeSymbol? namedTypeSymbol))
+                if (compilation.GetAccessibleTypeWithMetadataName("Windows.Foundation.IAsyncOperation`1", out INamedTypeSymbol? asyncOperation))
                 {
-                    yield return new MarshalGenericType(
-                        taskOfT,
-                        namedTypeSymbol,
-                        inner => $"global::System.WindowsRuntimeSystemExtensions.AsAsyncOperation(({inner}))",
-                        inner => $"global::System.WindowsRuntimeSystemExtensions.AsTask(({inner}))",
-                        taskOfT.TypeArguments);
+                    if (compilation.GetAccessibleTypeWithMetadataName("System.Threading.CancellationToken", out INamedTypeSymbol? cancellationToken))
+                    {
+                        yield return new MarshalGenericTypeWithArgs(
+                            taskOfT,
+                            asyncOperation,
+                            static inner => $"global::System.WindowsRuntimeSystemExtensions.AsAsyncOperation(({inner}))",
+                            static inner => $"global::System.WindowsRuntimeSystemExtensions.AsTask(({inner}))",
+                            static (inner, args) => $"global::System.Runtime.InteropServices.WindowsRuntime.AsyncInfo.Run(delegate ({string.Join(", ", args.Select(x => $"{x.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)} {x.Name}"))}) {{ return {inner(args)}; }})",
+                            static (inner, args) => $"global::System.WindowsRuntimeSystemExtensions.AsTask(({inner}, {string.Join(", ", args.Select(x => x.Name))}))",
+                            taskOfT.TypeArguments,
+                            cancellationToken);
+                    }
+                    else
+                    {
+                        yield return new MarshalGenericType(
+                            taskOfT,
+                            asyncOperation,
+                            static inner => $"global::System.WindowsRuntimeSystemExtensions.AsAsyncOperation(({inner}))",
+                            static inner => $"global::System.WindowsRuntimeSystemExtensions.AsTask(({inner}))",
+                            taskOfT.TypeArguments);
+                    }
                 }
             }
 
@@ -44,11 +61,79 @@ namespace WinRTWrapper.SourceGenerators
             {
                 if (compilation.GetAccessibleTypeWithMetadataName("Windows.Foundation.IAsyncAction", out INamedTypeSymbol? asyncAction))
                 {
-                    yield return new MarshalType(
-                        task,
-                        asyncAction,
-                        static inner => $"global::System.WindowsRuntimeSystemExtensions.AsAsyncAction({inner})",
-                        static inner => $"global::System.WindowsRuntimeSystemExtensions.AsTask({inner})");
+                    if (compilation.GetAccessibleTypeWithMetadataName("System.Threading.CancellationToken", out INamedTypeSymbol? cancellationToken))
+                    {
+                        yield return new MarshalTypeWithArgs(
+                            task,
+                            asyncAction,
+                            static inner => $"global::System.WindowsRuntimeSystemExtensions.AsAsyncAction({inner})",
+                            static inner => $"global::System.WindowsRuntimeSystemExtensions.AsTask({inner})",
+                            static (inner, args) => $"global::System.Runtime.InteropServices.WindowsRuntime.AsyncInfo.Run(delegate ({string.Join(", ", args.Select(x => $"{x.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)} {x.Name}"))}) {{ return {inner(args)}; }})",
+                            static (inner, args) => $"global::System.WindowsRuntimeSystemExtensions.AsTask(({inner}, {string.Join(", ", args.Select(x => x.Name))}))",
+                            cancellationToken);
+                    }
+                    else
+                    {
+                        yield return new MarshalType(
+                            task,
+                            asyncAction,
+                            static inner => $"global::System.WindowsRuntimeSystemExtensions.AsAsyncAction({inner})",
+                            static inner => $"global::System.WindowsRuntimeSystemExtensions.AsTask({inner})");
+                    }
+                }
+            }
+
+            if (compilation.GetAccessibleTypeWithMetadataName("System.Threading.Tasks.ValueTask`1", out INamedTypeSymbol? valueTaskOfT))
+            {
+                if (compilation.GetAccessibleTypeWithMetadataName("Windows.Foundation.IAsyncOperation`1", out INamedTypeSymbol? asyncOperation))
+                {
+                    if (compilation.GetAccessibleTypeWithMetadataName("System.Threading.CancellationToken", out INamedTypeSymbol? cancellationToken))
+                    {
+                        yield return new MarshalGenericTypeWithArgs(
+                            valueTaskOfT,
+                            asyncOperation,
+                            static inner => $"global::System.WindowsRuntimeSystemExtensions.AsAsyncOperation(({inner}).AsTask())",
+                            static inner => $"new global::System.Threading.Tasks.ValueTask(global::System.WindowsRuntimeSystemExtensions.AsTask({inner}))",
+                            static (inner, args) => $"global::System.Runtime.InteropServices.WindowsRuntime.AsyncInfo.Run(delegate ({string.Join(", ", args.Select(x => $"{x.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)} {x.Name}"))}) {{ return ({inner(args)}).AsTask(); }})",
+                            static (inner, args) => $"new global::System.Threading.Tasks.ValueTask(global::System.WindowsRuntimeSystemExtensions.AsTask(({inner}, {string.Join(", ", args.Select(x => x.Name))})))",
+                            valueTaskOfT.TypeArguments,
+                            cancellationToken);
+                    }
+                    else
+                    {
+                        yield return new MarshalGenericType(
+                            valueTaskOfT,
+                            asyncOperation,
+                            static inner => $"global::System.WindowsRuntimeSystemExtensions.AsAsyncOperation(({inner}).AsTask())",
+                            static inner => $"new global::System.Threading.Tasks.ValueTask(global::System.WindowsRuntimeSystemExtensions.AsTask({inner}))",
+                            valueTaskOfT.TypeArguments);
+                    }
+                }
+            }
+
+            if (compilation.GetAccessibleTypeWithMetadataName("System.Threading.Tasks.ValueTask", out INamedTypeSymbol? valueTask))
+            {
+                if (compilation.GetAccessibleTypeWithMetadataName("Windows.Foundation.IAsyncAction", out INamedTypeSymbol? asyncAction))
+                {
+                    if (compilation.GetAccessibleTypeWithMetadataName("System.Threading.CancellationToken", out INamedTypeSymbol? cancellationToken))
+                    {
+                        yield return new MarshalTypeWithArgs(
+                            valueTask,
+                            asyncAction,
+                            static inner => $"global::System.WindowsRuntimeSystemExtensions.AsAsyncAction(({inner}).AsTask())",
+                            static inner => $"new global::System.Threading.Tasks.ValueTask(global::System.WindowsRuntimeSystemExtensions.AsTask({inner}))",
+                            static (inner, args) => $"global::System.Runtime.InteropServices.WindowsRuntime.AsyncInfo.Run(delegate ({string.Join(", ", args.Select(x => $"{x.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)} {x.Name}"))}) {{ return ({inner(args)}).AsTask(); }})",
+                            static (inner, args) => $"new global::System.Threading.Tasks.ValueTask(global::System.WindowsRuntimeSystemExtensions.AsTask(({inner}, {string.Join(", ", args.Select(x => x.Name))})))",
+                            cancellationToken);
+                    }
+                    else
+                    {
+                        yield return new MarshalType(
+                            valueTask,
+                            asyncAction,
+                            static inner => $"global::System.WindowsRuntimeSystemExtensions.AsAsyncAction(({inner}).AsTask())",
+                            static inner => $"new global::System.Threading.Tasks.ValueTask(global::System.WindowsRuntimeSystemExtensions.AsTask({inner}))");
+                    }
                 }
             }
 

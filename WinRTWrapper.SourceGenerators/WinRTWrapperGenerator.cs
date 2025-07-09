@@ -71,6 +71,22 @@ namespace WinRTWrapper.SourceGenerators
             bool? needConstructor = null;
             foreach (ISymbolWrapper member in GetMembers(source, options.Marshals))
             {
+                if (options.IsCSWinRT && member.Wrapper is not { ContainingType.TypeKind: not TypeKind.Interface })
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        new DiagnosticDescriptor(
+                            "WRAPPER001",
+                            "Missing member definition in wrapper class",
+                            "The member '{0}' is not defined in the wrapper class '{1}' which C#/WinRT source generator needs it.",
+                            "WinRTWrapper",
+                            DiagnosticSeverity.Warning,
+                            true,
+                            "C#/WinRT source generator needs member definition to generate something important. It is not necessary on built-in WinRT platform.",
+                            "https://learn.microsoft.com/windows/apps/develop/platform/csharp-winrt/authoring"),
+                        symbol.Locations.FirstOrDefault(),
+                        member.Target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                        symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
+                }
                 switch (member)
                 {
                     case SymbolWrapper<IMethodSymbol> method:
@@ -174,28 +190,35 @@ namespace WinRTWrapper.SourceGenerators
                 switch (wrapper, target)
                 {
                     case (IMethodSymbol w, IMethodSymbol t):
-                        if (w.IsStatic == t.IsStatic && w.MethodKind == t.MethodKind && w.Name == t.Name && w.Parameters.Length == t.Parameters.Length)
+                        if (w.IsStatic == t.IsStatic && w.MethodKind == t.MethodKind && w.Name == t.Name)
                         {
-                            if (!w.ReturnType.Equals(t.ReturnType, SymbolEqualityComparer.Default))
+                            if (w.Parameters.Length == t.Parameters.Length)
                             {
-                                if (!IsWrapperType([.. w.GetReturnTypeAttributes(), .. t.GetReturnTypeAttributes()], marshals, t.ReturnType, w.ReturnType))
+                                if (!w.ReturnType.Equals(t.ReturnType, SymbolEqualityComparer.Default))
                                 {
-                                    return false;
-                                }
-                            }
-                            for (int i = 0; i < w.Parameters.Length; i++)
-                            {
-                                IParameterSymbol wrapperParam = w.Parameters[i];
-                                IParameterSymbol targetParam = t.Parameters[i];
-                                if (!wrapperParam.Type.Equals(targetParam.Type, SymbolEqualityComparer.Default))
-                                {
-                                    if (!IsWrapperType([.. wrapperParam.GetAttributes(), .. targetParam.GetAttributes()], marshals, targetParam.Type, wrapperParam.Type))
+                                    if (!IsWrapperType([.. w.GetReturnTypeAttributes(), .. t.GetReturnTypeAttributes()], marshals, t.ReturnType, w.ReturnType))
                                     {
                                         return false;
                                     }
                                 }
+                                for (int i = 0; i < w.Parameters.Length; i++)
+                                {
+                                    IParameterSymbol wrapperParam = w.Parameters[i];
+                                    IParameterSymbol targetParam = t.Parameters[i];
+                                    if (!wrapperParam.Type.Equals(targetParam.Type, SymbolEqualityComparer.Default))
+                                    {
+                                        if (!IsWrapperType([.. wrapperParam.GetAttributes(), .. targetParam.GetAttributes()], marshals, targetParam.Type, wrapperParam.Type))
+                                        {
+                                            return false;
+                                        }
+                                    }
+                                }
+                                return true;
                             }
-                            return true;
+                            else if (w.Parameters.Length == t.Parameters.Length)
+                            {
+
+                            }
                         }
                         return false;
                     case (IPropertySymbol w, IPropertySymbol t):

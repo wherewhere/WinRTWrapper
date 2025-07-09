@@ -34,6 +34,13 @@ namespace WinRTWrapper.SourceGenerators.Models
         /// <inheritdoc/>
         ISymbol ISymbolWrapper.Target => Target;
 
+        /// <summary>
+        /// Deconstructs the <see cref="SymbolWrapper{T}"/> into its constituent parts.
+        /// </summary>
+        /// <param name="wrapperSymbol">The symbol of the wrapper.</param>
+        /// <param name="targetSymbol">The symbol of the target.</param>
+        /// <param name="wrapper">The wrapped symbol, if any.</param>
+        /// <param name="target">The target symbol being wrapped.</param>
         public void Deconstruct(out INamedTypeSymbol wrapperSymbol, out INamedTypeSymbol targetSymbol, out T? wrapper, out T target)
         {
             wrapperSymbol = WrapperSymbol;
@@ -42,6 +49,10 @@ namespace WinRTWrapper.SourceGenerators.Models
             target = Target;
         }
 
+        /// <summary>
+        /// Gets the member modifier string for the wrapped symbol.
+        /// </summary>
+        /// <returns>The member modifier string, which includes accessibility, static, and partial definition modifiers.</returns>
         public string GetMemberModify()
         {
             return (Wrapper, Target) switch
@@ -53,8 +64,18 @@ namespace WinRTWrapper.SourceGenerators.Models
         }
     }
 
+    /// <summary>
+    /// Factory class for creating instances of <see cref="ISymbolWrapper"/> based on the type of symbol.
+    /// </summary>
     internal static class SymbolWrapper
     {
+        /// <summary>
+        /// Creates an instance of <see cref="ISymbolWrapper"/> based on the type of the provided symbol.
+        /// </summary>
+        /// <typeparam name="T">The type of the symbol being wrapped, which must implement <see cref="ISymbol"/>.</typeparam>
+        /// <param name="symbol">The symbol that contains the target symbol.</param>
+        /// <param name="target">The target symbol that is being wrapped.</param>
+        /// <returns>The created <see cref="ISymbolWrapper"/> instance.</returns>
         public static ISymbolWrapper Create<T>(INamedTypeSymbol symbol, T target) where T : ISymbol => target switch
         {
             IMethodSymbol method => new SymbolWrapper<IMethodSymbol>(symbol, method),
@@ -63,6 +84,13 @@ namespace WinRTWrapper.SourceGenerators.Models
             _ => new SymbolWrapper<T>(symbol, target),
         };
 
+        /// <summary>
+        /// Creates an instance of <see cref="ISymbolWrapper"/> based on the provided wrapper and target symbols.
+        /// </summary>
+        /// <typeparam name="T">The type of the symbol being wrapped, which must implement <see cref="ISymbol"/>.</typeparam>
+        /// <param name="wrapper">The symbol that contains the target symbol.</param>
+        /// <param name="target">The target symbol that is being wrapped.</param>
+        /// <returns>The created <see cref="ISymbolWrapper"/> instance.</returns>
         public static ISymbolWrapper Create<T>(T wrapper, T target) where T : ISymbol => (wrapper, target) switch
         {
             (IMethodSymbol w, IMethodSymbol t) => new SymbolWrapper<IMethodSymbol>(w, t),
@@ -72,6 +100,9 @@ namespace WinRTWrapper.SourceGenerators.Models
         };
     }
 
+    /// <summary>
+    /// Represents a wrapper for a symbol that contains a target symbol and an optional wrapper symbol.
+    /// </summary>
     internal interface ISymbolWrapper
     {
         /// <summary>

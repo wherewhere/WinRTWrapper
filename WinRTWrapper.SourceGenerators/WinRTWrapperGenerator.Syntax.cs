@@ -108,37 +108,92 @@ namespace WinRTWrapper.SourceGenerators
                     break;
                 case { MethodKind: MethodKind.Ordinary }:
                     MarshalType returnType = GetWrapperType([.. wrapper?.GetReturnTypeAttributes() ?? [], .. method.GetReturnTypeAttributes()], marshals, method.ReturnType, wrapper?.ReturnType);
-                    IEnumerable<(MarshalType marshal, string name)> parameters = GetParameters(source);
-                    IEnumerable<(MarshalType marshal, string name)> GetParameters(SymbolWrapper<IMethodSymbol> source)
+                    static bool CheckArgs(ImmutableArray<ITypeSymbol> arguments, ImmutableArray<IParameterSymbol> parameters)
                     {
-                        (IMethodSymbol? wrapper, IMethodSymbol target) = source;
-                        if (wrapper == null)
+                        if (parameters.Length >= arguments.Length)
                         {
-                            return method.Parameters.Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type), x.Name));
-                        }
-                        else
-                        {
-                            IEnumerable<(MarshalType marshal, string name)> GetParameters(IMethodSymbol wrapper, IMethodSymbol target)
+                            for (int i = 1; i <= arguments.Length; i++)
                             {
-                                for (int i = 0; i < wrapper.Parameters.Length; i++)
+                                ITypeSymbol argument = arguments[^i];
+                                IParameterSymbol parameter = parameters[^i];
+                                if (!parameter.Type.IsSubclassOf(argument))
                                 {
-                                    IParameterSymbol wrapperParam = wrapper.Parameters[i];
-                                    IParameterSymbol targetParam = target.Parameters[i];
-                                    yield return (GetWrapperType([.. wrapperParam.GetAttributes(), .. targetParam.GetAttributes()], marshals, targetParam.Type, wrapperParam.Type), wrapperParam.Name);
+                                    return false;
                                 }
                             }
-                            return GetParameters(wrapper, target);
+                            return true;
                         }
+                        return false;
                     }
-                    _ = builder.AppendLine(handler:
-                        $$"""
-                                /// <inheritdoc cref="{{method.GetConstructedFromDocumentationCommentId()}}"/>
-                                {{source.GetMemberModify()}}{{returnType.WrapperTypeName}} {{method.Name}}({{string.Join(" ", parameters.Select(x => $"{x.marshal.WrapperTypeName} {x.name}"))}})
+                    if (returnType is MarshalTypeWithArgs { Arguments: { Length: > 0 } arguments } returnWithArgs && CheckArgs(arguments, method.Parameters))
+                    {
+                        IEnumerable<(MarshalType marshal, string name)> parameters = GetParameters(source);
+                        IEnumerable<(MarshalType marshal, string name)> GetParameters(SymbolWrapper<IMethodSymbol> source)
+                        {
+                            (IMethodSymbol? wrapper, IMethodSymbol target) = source;
+                            if (wrapper == null)
+                            {
+                                return method.Parameters[..^arguments.Length].Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type), x.Name));
+                            }
+                            else
+                            {
+                                IEnumerable<(MarshalType marshal, string name)> GetParameters(IMethodSymbol wrapper, IMethodSymbol target)
                                 {
-                                    {{(method.ReturnsVoid ? string.Empty : "return ")}}{{returnType.ConvertToWrapper($"{target.GetMemberTarget(method)}.{method.Name}({string.Join(", ", parameters.Select(x => x.marshal.ConvertToManaged(x.name)))})")}};
+                                    for (int i = 0; i < wrapper.Parameters.Length; i++)
+                                    {
+                                        IParameterSymbol wrapperParam = wrapper.Parameters[i];
+                                        IParameterSymbol targetParam = target.Parameters[i];
+                                        yield return (GetWrapperType([.. wrapperParam.GetAttributes(), .. targetParam.GetAttributes()], marshals, targetParam.Type, wrapperParam.Type), wrapperParam.Name);
+                                    }
                                 }
+                                return GetParameters(wrapper, target);
+                            }
+                        }
+                        _ = builder.AppendLine(handler:
+                            $$"""
+                                    /// <inheritdoc cref="{{method.GetConstructedFromDocumentationCommentId()}}"/>
+                                    {{source.GetMemberModify()}}{{returnType.WrapperTypeName}} {{method.Name}}({{string.Join(" ", parameters.Select(x => $"{x.marshal.WrapperTypeName} {x.name}"))}})
+                                    {
+                                        {{(method.ReturnsVoid ? string.Empty : "return ")}}{{returnWithArgs.ConvertToWrapperWithArgs(args => $"{target.GetMemberTarget(method)}.{method.Name}({string.Join(", ", parameters.Select(x => x.marshal.ConvertToManaged(x.name)).Concat(args.Select(x => x.Name)))})", [.. method.Parameters[^arguments.Length..]])}};
+                                    }
 
-                        """);
+                            """);
+                        break;
+                    }
+                    else
+                    {
+                        IEnumerable<(MarshalType marshal, string name)> parameters = GetParameters(source);
+                        IEnumerable<(MarshalType marshal, string name)> GetParameters(SymbolWrapper<IMethodSymbol> source)
+                        {
+                            (IMethodSymbol? wrapper, IMethodSymbol target) = source;
+                            if (wrapper == null)
+                            {
+                                return method.Parameters.Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type), x.Name));
+                            }
+                            else
+                            {
+                                IEnumerable<(MarshalType marshal, string name)> GetParameters(IMethodSymbol wrapper, IMethodSymbol target)
+                                {
+                                    for (int i = 0; i < wrapper.Parameters.Length; i++)
+                                    {
+                                        IParameterSymbol wrapperParam = wrapper.Parameters[i];
+                                        IParameterSymbol targetParam = target.Parameters[i];
+                                        yield return (GetWrapperType([.. wrapperParam.GetAttributes(), .. targetParam.GetAttributes()], marshals, targetParam.Type, wrapperParam.Type), wrapperParam.Name);
+                                    }
+                                }
+                                return GetParameters(wrapper, target);
+                            }
+                        }
+                        _ = builder.AppendLine(handler:
+                            $$"""
+                                    /// <inheritdoc cref="{{method.GetConstructedFromDocumentationCommentId()}}"/>
+                                    {{source.GetMemberModify()}}{{returnType.WrapperTypeName}} {{method.Name}}({{string.Join(" ", parameters.Select(x => $"{x.marshal.WrapperTypeName} {x.name}"))}})
+                                    {
+                                        {{(method.ReturnsVoid ? string.Empty : "return ")}}{{returnType.ConvertToWrapper($"{target.GetMemberTarget(method)}.{method.Name}({string.Join(", ", parameters.Select(x => x.marshal.ConvertToManaged(x.name)))})")}};
+                                    }
+
+                            """);
+                    }
                     break;
             }
             return builder;
@@ -431,7 +486,7 @@ namespace WinRTWrapper.SourceGenerators
             {
                 if (marshals.FirstOrDefault(x => original.IsSubclassOf(x.ManagedType) && expect?.IsSubclassOf(x.WrapperType) != false) is MarshalType marshier)
                 {
-                    if (marshier is MarshalGenericType generic && original is INamedTypeSymbol symbol)
+                    if (marshier is IMarshalGenericType generic && original is INamedTypeSymbol symbol)
                     {
                         generic.GenericArguments = symbol.TypeArguments;
                     }

@@ -16,6 +16,7 @@ A wrapper source generator for WinRT
        public int Property { get; set; }
        public int Method() => Property;
        public Task MethodAsync() => Task.CompletedTask;
+       public Task MethodWithTokenAsync(CancellationToken cancellationToken) => Task.CompletedTask;
        public event EventHandler<int>? Event;
    }
    ```
@@ -67,9 +68,15 @@ A wrapper source generator for WinRT
        }
 
        /// <inheritdoc cref="M:Simple.MethodAsync"/>
-       public static global::Windows.Foundation.IAsyncAction MethodAsync()
+       public global::Windows.Foundation.IAsyncAction MethodAsync()
        {
            return global::System.WindowsRuntimeSystemExtensions.AsAsyncAction(this.target.MethodAsync());
+       }
+
+       /// <inheritdoc cref="M:Simple.MethodWithTokenAsync(System.Threading.CancellationToken)"/>
+       public global::Windows.Foundation.IAsyncAction MethodWithTokenAsync()
+       {
+           return global::System.Runtime.InteropServices.WindowsRuntime.AsyncInfo.Run(delegate (global::System.Threading.CancellationToken cancellationToken) { return this.target.MethodWithTokenAsync(cancellationToken); });
        }
 
        /// <inheritdoc cref="E:Simple.Event"/>

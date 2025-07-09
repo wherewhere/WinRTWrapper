@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading;
 using System.Threading.Tasks;
 using WinRTWrapper.CodeAnalysis;
 
@@ -375,23 +376,95 @@ namespace WinRTWrapper.Test
         }
 
         /// <summary>
-        /// Returns a completed <see cref="Task"/> instance.
+        /// Asynchronously retrieves a <see cref="Task"/> instance.
         /// </summary>
-        /// <returns>A completed <see cref="Task"/> instance.</returns>
-        public static Task GetTaskAsync()
+        /// <param name="task">The <see cref="Task"/> instance to retrieve.</param>
+        /// <returns>The <see cref="Task"/> instance representing the asynchronous operation.</returns>
+        public static Task GetTaskAsync(Task task)
         {
-            return Task.CompletedTask;
+            return task;
+        }
+
+        /// <summary>
+        /// Asynchronously retrieves a <see cref="Task"/> instance.
+        /// </summary>
+        /// <param name="task">The <see cref="Task"/> instance to retrieve.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> that can be used to cancel the operation.</param>
+        /// <returns>The <see cref="Task"/> instance representing the asynchronous operation.</returns>
+        public static Task GetTaskWithTokenAsync(Task task, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return task;
         }
 
         /// <summary>
         /// Asynchronously retrieves an integer value.
         /// </summary>
+        /// <param name="task">The <see cref="Task{TResult}"/> instance to retrieve.</param>
         /// <returns>A <see cref="Task{TResult}"/> representing the asynchronous operation. The result contains the integer
         /// value retrieved.</returns>
-        public static Task<int> GetGenericTaskAsync()
+        public static Task<int> GetGenericTaskAsync(Task<int> task)
         {
-            return Task.FromResult(_field);
+            return task;
         }
+
+        /// <summary>
+        /// Asynchronously retrieves an integer value.
+        /// </summary>
+        /// <param name="task">The <see cref="Task{TResult}"/> instance to retrieve.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> that can be used to cancel the operation.</param>
+        /// <returns>A <see cref="Task{TResult}"/> representing the asynchronous operation. The result contains the integer
+        /// value retrieved.</returns>
+        public static Task<int> GetGenericTaskWithTokenAsync(Task<int> task, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return task;
+        }
+
+#if NET
+        /// <summary>
+        /// Asynchronously retrieves a <see cref="ValueTask"/> instance.
+        /// </summary>
+        /// <param name="task">The <see cref="ValueTask"/> instance to retrieve.</param>
+        /// <returns>The <see cref="ValueTask"/> instance representing the asynchronous operation.</returns>
+        public static ValueTask GetValueTaskAsync(ValueTask task)
+        {
+            return task;
+        }
+
+        /// <summary>
+        /// Asynchronously retrieves a <see cref="ValueTask"/> instance.
+        /// </summary>
+        /// <param name="task">The <see cref="ValueTask"/> instance to retrieve.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> that can be used to cancel the operation.</param>
+        /// <returns>The <see cref="ValueTask"/> instance representing the asynchronous operation.</returns>
+        public static ValueTask GetValueTaskWithTokenAsync(ValueTask task, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return task;
+        }
+
+        /// <summary>
+        /// Asynchronously retrieves an integer value.
+        /// </summary>
+        /// <returns>A <see cref="ValueTask{TResult}"/> representing the asynchronous operation. The result contains the integer
+        /// value retrieved.</returns>
+        public static ValueTask<int> GetGenericValueTaskAsync()
+        {
+            return ValueTask.FromResult(_field);
+        }
+
+        /// <summary>
+        /// Asynchronously retrieves an integer value.
+        /// </summary>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> that can be used to cancel the operation.</param>
+        /// <returns>A <see cref="ValueTask{TResult}"/> representing the asynchronous operation. The result contains the integer
+        /// value retrieved.</returns>
+        public static ValueTask<int> GetGenericValueTaskWithTokenAsync(CancellationToken cancellationToken = default)
+        {
+            return ValueTask.FromResult(_field);
+        }
+#endif
     }
 
     /// <summary>
