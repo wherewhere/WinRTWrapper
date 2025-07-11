@@ -57,7 +57,8 @@ namespace WinRTWrapper.SourceGenerators.Models
         {
             return (Wrapper, Target) switch
             {
-                (IMethodSymbol wrapper, _) => $"{wrapper.DeclaredAccessibility.FormatToString()} {(wrapper.IsStatic ? "static " : string.Empty)}{(wrapper.IsPartialDefinition ? "partial " : string.Empty)}",
+                (IMethodSymbol wrapper, _) => $"{wrapper.DeclaredAccessibility.FormatToString()} {(wrapper.IsStatic ? "static " : string.Empty)}{(wrapper.IsOverride ? "override " : string.Empty)}{(wrapper.IsVirtual ? "virtual " : string.Empty)}{(wrapper.IsPartialDefinition ? "partial " : string.Empty)}",
+                (IPropertySymbol wrapper, _) => $"{wrapper.DeclaredAccessibility.FormatToString()} {(wrapper.IsStatic ? "static " : string.Empty)}{(wrapper.IsOverride ? "override " : string.Empty)}{(wrapper.IsVirtual ? "virtual " : string.Empty)}{(wrapper.IsPartialDefinition ? "partial " : string.Empty)}",
                 (null, T target) => $"public {(target.IsStatic ? "static " : string.Empty)}",
                 _ => string.Empty
             };

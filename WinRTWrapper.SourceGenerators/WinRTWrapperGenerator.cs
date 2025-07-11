@@ -78,7 +78,7 @@ namespace WinRTWrapper.SourceGenerators
                             "WRAPPER001",
                             "Missing member definition in wrapper class",
                             "The member '{0}' is not defined in the wrapper class '{1}' which C#/WinRT source generator needs it.",
-                            "WinRTWrapper",
+                            "Wrapper",
                             DiagnosticSeverity.Warning,
                             true,
                             "C#/WinRT source generator needs member definition to generate something important. It is not necessary on built-in WinRT platform.",
@@ -179,8 +179,8 @@ namespace WinRTWrapper.SourceGenerators
                 return member switch
                 {
                     IMethodSymbol method => method.IsPartialDefinition,
-                    IPropertySymbol property => property.GetMethod?.IsPartialDefinition == true || property.SetMethod?.IsPartialDefinition == true,
-                    IEventSymbol @event => @event.AddMethod?.IsPartialDefinition == true || @event.RemoveMethod?.IsPartialDefinition == true,
+                    IPropertySymbol property => property.IsPartialDefinition,
+                    IEventSymbol @event => @event.IsPartialDefinition,
                     _ => false
                 };
             }

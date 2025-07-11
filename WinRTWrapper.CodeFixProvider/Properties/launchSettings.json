@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "WinRTWrapper.CodeFixer": {
+      "commandName": "DebugRoslynComponent",
+      "targetProject": "../WinRTWrapper.Test/WinRTWrapper.Test.csproj"
+    }
+  }
+}

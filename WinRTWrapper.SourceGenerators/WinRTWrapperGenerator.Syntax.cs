@@ -1,10 +1,10 @@
 ﻿using Microsoft.CodeAnalysis;
-using System.CodeDom;
-using System.CodeDom.Compiler;
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Reflection.Metadata;
 using System.Text;
 using WinRTWrapper.SourceGenerators.Extensions;
 using WinRTWrapper.SourceGenerators.Models;
@@ -91,10 +91,7 @@ namespace WinRTWrapper.SourceGenerators
                     _ = builder.AppendLine(handler:
                         $$"""
                                 /// <inheritdoc cref="{{method.GetConstructedFromDocumentationCommentId()}}"/>
-                                {{source.GetMemberModify()}}{{symbol.Name}}({{string.Join(" ", method.Parameters.Select(x => x.ToDisplayString()))}})
-                                {
-                                    this.target = new {{target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}({{string.Join(", ", method.Parameters.Select(x => x.Name))}});
-                                }
+                                {{source.GetMemberModify()}}{{symbol.Name}}({{string.Join(" ", method.Parameters.Select(x => x.ToDisplayString()))}}) : this(new {{target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}({{string.Join(", ", method.Parameters.Select(x => x.Name))}})) { }
 
                         """);
                     if (method.Parameters.Length == 0)
@@ -159,6 +156,19 @@ namespace WinRTWrapper.SourceGenerators
 
                             """);
                         break;
+                    }
+                    else if (method is { IsStatic: false, Parameters.Length: 0, Name: nameof(IDisposable.Dispose), ReturnType.SpecialType: SpecialType.System_Void } && symbol.AllInterfaces.Any(x => x.Name == nameof(System.IDisposable) && x.ContainingNamespace.ToDisplayString() == nameof(System)))
+                    {
+                        _ = builder.AppendLine(handler:
+                            $$"""
+                                    /// <inheritdoc cref="{{method.GetConstructedFromDocumentationCommentId()}}"/>
+                                    {{source.GetMemberModify()}}void {{nameof(IDisposable.Dispose)}}()
+                                    {
+                                        {{target.GetMemberTarget(method)}}.{{nameof(IDisposable.Dispose)}}();
+                                        global::System.GC.SuppressFinalize(this);
+                                    }
+
+                            """);
                     }
                     else
                     {
@@ -230,7 +240,7 @@ namespace WinRTWrapper.SourceGenerators
                         _ = builder.AppendLine(handler:
                             $$"""
                                     /// <inheritdoc cref="{{property.GetConstructedFromDocumentationCommentId()}}"/>
-                                    public {{returnType.WrapperTypeName}} this[{{string.Join(" ", parameters.Select(x => $"{x.marshal.WrapperTypeName} {x.name}"))}}]
+                                    {{source.GetMemberModify()}}{{returnType.WrapperTypeName}} this[{{string.Join(" ", parameters.Select(x => $"{x.marshal.WrapperTypeName} {x.name}"))}}]
                                     {
                                         get
                                         {
@@ -260,7 +270,7 @@ namespace WinRTWrapper.SourceGenerators
                     _ = builder.AppendLine(handler:
                         $$"""
                                 /// <inheritdoc cref="{{property.GetConstructedFromDocumentationCommentId()}}"/>
-                                {{property.GetMemberModify()}}{{marshal.WrapperTypeName}} {{property.Name}}
+                                {{source.GetMemberModify()}}{{marshal.WrapperTypeName}} {{property.Name}}
                                 {
                                     get
                                     {

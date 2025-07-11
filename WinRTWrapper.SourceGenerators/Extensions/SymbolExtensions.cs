@@ -1,6 +1,9 @@
 ﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Linq;
+using System.Xml.Linq;
 
 namespace WinRTWrapper.SourceGenerators.Extensions
 {
@@ -60,6 +63,26 @@ namespace WinRTWrapper.SourceGenerators.Extensions
             return IsEquals(type, baseType)
                 || baseType.TypeKind == TypeKind.Interface && type.AllInterfaces.Any(x => IsEquals(x, baseType))
                 || (type.BaseType?.IsSubclassOf(baseType) ?? false);
+        }
+
+        /// <summary>
+        /// Determines whether the specified type is a subclass of, or implements, the specified base type.
+        /// </summary>
+        /// <typeparam name="T">The type to check. Must implement <see cref="ITypeSymbol"/>.</typeparam>
+        /// <param name="type">The type to evaluate.</param>
+        /// <param name="baseTypeNameSpace">The namespace of the base type to check for inheritance or implementation.</param>
+        /// <param name="baseTypeName">The name of the base type to check for inheritance or implementation.</param>
+        /// <returns><see langword="true"/> if <paramref name="type"/> is equal to base type, implements
+        /// base type, or is a subclass of base type; otherwise, <see
+        /// langword="false"/>.</returns>
+        public static bool IsSubclassOf<T>(this T type, string baseTypeNameSpace, string baseTypeName)
+            where T : ITypeSymbol
+        {
+            static bool IsEquals<SubT>(SubT type, string baseTypeNameSpace, string baseTypeName) where SubT : ITypeSymbol =>
+                type.Name == baseTypeName && type.ContainingNamespace.ToDisplayString() == baseTypeNameSpace;
+            return IsEquals(type, baseTypeNameSpace, baseTypeName)
+                || type.AllInterfaces.Any(x => IsEquals(x, baseTypeNameSpace, baseTypeName))
+                || (type.BaseType?.IsSubclassOf(baseTypeNameSpace, baseTypeName) ?? false);
         }
 
         /// <summary>
