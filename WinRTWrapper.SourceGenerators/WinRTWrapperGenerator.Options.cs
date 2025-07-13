@@ -22,9 +22,10 @@ namespace WinRTWrapper.SourceGenerators
         {
             (AnalyzerConfigOptionsProvider options, Compilation compilation) = source;
             bool isWinMDObject = options.GetStringMSBuildProperty(MSBuildProperties.OutputType).Equals("winmdobj", StringComparison.OrdinalIgnoreCase);
+            bool isWinRTComponent = options.GetBoolMSBuildProperty(MSBuildProperties.CsWinRTComponent);
             bool isCSWinRT = compilation.ReferencedAssemblyNames.Any(x => x.Name.Equals("WinRT.Runtime", StringComparison.OrdinalIgnoreCase));
             IEnumerable<MarshalType> marshals = CreateMarshallers(compilation);
-            return new GenerationOptions(isWinMDObject, isCSWinRT, [.. marshals]);
+            return new GenerationOptions(isWinMDObject, isWinRTComponent, isCSWinRT, [.. marshals]);
         }
 
         private static IEnumerable<MarshalType> CreateMarshallers(Compilation compilation)

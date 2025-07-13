@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using Windows.Foundation;
 using WinRTWrapper.CodeAnalysis;
 
 namespace WinRTWrapper.Test
@@ -84,6 +86,18 @@ namespace WinRTWrapper.Test
             {
                 Event(this, _field);
             }
+        }
+
+        /// <summary>
+        /// Asynchronously retrieves a <see cref="Task"/> instance.
+        /// </summary>
+        /// <param name="task">The <see cref="Task"/> instance to retrieve.</param>
+        /// <param name="cancellationToken">A <see cref="CancellationToken"/> that can be used to cancel the operation.</param>
+        /// <returns>The <see cref="Task"/> instance representing the asynchronous operation.</returns>
+        public static Task GetTaskWithTokenAsync(Task task, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return task;
         }
 
         /// <summary>
@@ -468,6 +482,44 @@ namespace WinRTWrapper.Test
     }
 
     /// <summary>
+    /// Class <see cref="SimpleBase"/> serves as a base class with properties and methods.
+    /// </summary>
+    internal class SimpleBase
+    {
+        /// <summary>
+        /// Gets or sets the value of a property.
+        /// </summary>
+        public int Property { get; set; }
+
+        /// <summary>
+        /// Retrieves the value of a private field.
+        /// </summary>
+        /// <returns>The integer value stored in the field.</returns>
+        public int Method() => Property;
+
+        /// <summary>
+        /// Performs an operation that does not return a value.
+        /// </summary>
+        public virtual void VirtualMethod() { }
+    }
+
+    /// <summary>
+    /// Class <see cref="SimpleSub"/> inherits from <see cref="SimpleBase"/> and overrides the virtual method.
+    /// </summary>
+    internal class SimpleSub : SimpleBase
+    {
+        /// <inheritdoc/>
+        public override void VirtualMethod() { }
+
+        /// <summary>
+        /// Gets a new instance of the <see cref="SimpleSub"/> class.
+        /// </summary>
+        /// <returns>The new instance of <see cref="SimpleSub"/>.</returns>
+        [return: WinRTWrapperMarshalUsing(typeof(SimpleBaseWrapper))]
+        public SimpleSub GetSelf() => this;
+    }
+
+    /// <summary>
     /// Delegate <see cref="DelegateSimple"/> is a delegate that takes a <see cref="GenericSimpleWrapper"/> argument and returns a <see cref="SimpleWrapper"/>.
     /// </summary>
     /// <param name="arg">The argument of type <see cref="GenericSimpleWrapper"/>.</param>
@@ -532,11 +584,21 @@ namespace WinRTWrapper.Test
     [GenerateWinRTWrapper(typeof(StaticSimple))]
     public static partial class StaticSimpleWrapper { }
 
+    [WinRTWrapperMarshaller(typeof(SimpleBase), typeof(SimpleBaseWrapper))]
+    [GenerateWinRTWrapper(typeof(SimpleBase))]
+    public sealed partial class SimpleBaseWrapper { }
+
+    [WinRTWrapperMarshaller(typeof(SimpleSub), typeof(SimpleSubWrapper))]
+    [GenerateWinRTWrapper(typeof(SimpleSub))]
+    public sealed partial class SimpleSubWrapper { }
+
     [WinRTWrapperMarshaller(typeof(Simple), typeof(DefinedSimpleWrapper))]
     [GenerateWinRTWrapper(typeof(Simple), GenerateMember.Defined)]
     public sealed partial class DefinedSimpleWrapper
     {
         public partial int Method();
+
+        public static partial IAsyncAction GetTaskWithTokenAsync(IAsyncAction task);
 
 #if !NET
         public static partial DefinedSimpleWrapper GetSelf(DefinedSimpleWrapper self);

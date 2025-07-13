@@ -1,14 +1,20 @@
 ﻿using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
+using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
-using System.Xml.Linq;
+using WinRTWrapper.SourceGenerators.Helpers;
 
 namespace WinRTWrapper.SourceGenerators.Extensions
 {
     internal static class SymbolExtensions
     {
+        /// <summary>
+        /// Formats the <see cref="Accessibility"/> enum to a string representation.
+        /// </summary>
+        /// <param name="accessibility">The <see cref="Accessibility"/> value to format.</param>
+        /// <returns>The string representation of the accessibility.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when the <paramref name="accessibility"/> value is not recognized.</exception>
         public static string FormatToString(this Accessibility accessibility) => accessibility switch
         {
             Accessibility.NotApplicable => string.Empty,
@@ -54,16 +60,26 @@ namespace WinRTWrapper.SourceGenerators.Extensions
             where T : ITypeSymbol
             where TBase : ITypeSymbol
         {
-            static bool IsEquals<SubT>(SubT type, TBase baseType) where SubT : ITypeSymbol =>
-                type.Equals(baseType, SymbolEqualityComparer.Default) || (type, baseType) switch
-                {
-                    (INamedTypeSymbol { IsGenericType: true } namedTypeSymbol, INamedTypeSymbol { IsGenericType: true }) => namedTypeSymbol.ConstructedFrom.Equals(baseType, SymbolEqualityComparer.Default),
-                    _ => false,
-                };
-            return IsEquals(type, baseType)
-                || baseType.TypeKind == TypeKind.Interface && type.AllInterfaces.Any(x => IsEquals(x, baseType))
+            return type.IsSameType(baseType)
+                || baseType.TypeKind == TypeKind.Interface && type.AllInterfaces.Any(x => x.IsSameType(baseType))
                 || (type.BaseType?.IsSubclassOf(baseType) ?? false);
         }
+
+        /// <summary>
+        /// Determines whether the specified type is the same as the specified base type.
+        /// </summary>
+        /// <typeparam name="TLeft">The type of the left symbol, which must implement <see cref="ITypeSymbol"/>.</typeparam>
+        /// <typeparam name="TRight">The type of the right symbol, which must implement <see cref="ITypeSymbol"/>.</typeparam>
+        /// <param name="left">The left symbol to compare.</param>
+        /// <param name="right">The right symbol to compare.</param>
+        /// <returns><see langword="true"/> if <paramref name="left"/> and <paramref name="right"/> are the same type; otherwise, <see langword="false"/>.</returns>"
+        public static bool IsSameType<TLeft, TRight>(this TLeft left, TRight right)
+            where TLeft : ITypeSymbol
+            where TRight : ITypeSymbol => (left, right) switch
+            {
+                (INamedTypeSymbol { IsGenericType: true } leftNamed, INamedTypeSymbol { IsGenericType: true } rightNamed) when leftNamed.TypeArguments.All(x => x is ITypeParameterSymbol) || rightNamed.TypeArguments.All(x => x is ITypeParameterSymbol) => rightNamed.ConstructedFrom.Equals(leftNamed.ConstructedFrom, SymbolEqualityComparer.Default),
+                _ => left.Equals(right, SymbolEqualityComparer.Default),
+            };
 
         /// <summary>
         /// Determines whether the specified type is a subclass of, or implements, the specified base type.
@@ -84,6 +100,71 @@ namespace WinRTWrapper.SourceGenerators.Extensions
                 || type.AllInterfaces.Any(x => IsEquals(x, baseTypeNameSpace, baseTypeName))
                 || (type.BaseType?.IsSubclassOf(baseTypeNameSpace, baseTypeName) ?? false);
         }
+
+        /// <summary>
+        /// Determines whether the specified type is suitable for the target type based on the specified variance kind.
+        /// </summary>
+        /// <typeparam name="TSource">The type to check. Must implement <see cref="ITypeSymbol"/>.</typeparam>
+        /// <typeparam name="TTarget">The target type to compare against. Must implement <see cref="ITypeSymbol"/>.</typeparam>
+        /// <param name="type">The type to evaluate.</param>
+        /// <param name="target">The target type to check for suitability.</param>
+        /// <param name="variance">The variance kind to use for the comparison. Defaults to <see cref="VarianceKind.None"/>.</param>
+        /// <returns><see langword="true"/> if <paramref name="type"/> is suitable for <paramref name="target"/> based on the specified variance; otherwise, <see langword="false"/>.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when an invalid <paramref name="variance"/> kind is specified.</exception>
+        public static bool IsSuitable<TSource, TTarget>(this TSource type, TTarget target, VarianceKind variance = VarianceKind.None)
+            where TSource : ITypeSymbol
+            where TTarget : ITypeSymbol => variance switch
+            {
+                VarianceKind.None => type.IsSameType(target),
+                VarianceKind.Out => type.IsSubclassOf(target),
+                VarianceKind.In => target.IsSubclassOf(type),
+                _ => throw new ArgumentOutOfRangeException(nameof(variance), variance, "Invalid variance kind specified."),
+            };
+
+        /// <summary>
+        /// Get all the members of this symbol.
+        /// </summary>
+        /// <returns>An <see cref="ImmutableArray{ISymbol}"/> containing all the members of this symbol. If this symbol has no members,
+        /// returns an empty <see cref="ImmutableArray{ISymbol}"/>. Never returns Null.</returns>
+        public static ImmutableArray<ISymbol> GetAllMembers<T>(this T symbol) where T : ITypeSymbol
+        {
+            ImmutableArrayBuilder<ISymbol> builder = ImmutableArrayBuilder<ISymbol>.Rent();
+            builder.AddRange(symbol.GetMembers());
+            ITypeSymbol type = symbol;
+            if (type.BaseType is { TypeKind: TypeKind.Class, SpecialType: SpecialType.None } baseType)
+            {
+                type = baseType;
+                List<ISymbol> temp = [];
+                foreach (ISymbol member in type.GetMembers())
+                {
+                    if (!builder.GetEnumerable().Any(x => x.IsSameMember(member)))
+                    {
+                        temp.Add(member);
+                    }
+                }
+                builder.AddRange(temp);
+            }
+            return builder.ToImmutable();
+        }
+
+        /// <summary>
+        /// Determines whether two symbols are the same member.
+        /// </summary>
+        /// <typeparam name="TLeft">The type of the left symbol, which must implement <see cref="ISymbol"/>.</typeparam>
+        /// <typeparam name="TRight">The type of the right symbol, which must implement <see cref="ISymbol"/>.</typeparam>
+        /// <param name="left">The left symbol to compare.</param>
+        /// <param name="right">The right symbol to compare.</param>
+        /// <returns>True if the two symbols represent the same member; otherwise, false.</returns>
+        public static bool IsSameMember<TLeft, TRight>(this TLeft left, TRight right)
+            where TLeft : ISymbol
+            where TRight : ISymbol => (left, right) switch
+            {
+                (IMethodSymbol l, IMethodSymbol r) => l.Name == r.Name && l.Parameters.Length == r.Parameters.Length && l.TypeParameters.Length == r.TypeParameters.Length && l.Parameters.Select(x => x.Type).SequenceEqual(r.Parameters.Select(x => x.Type), SymbolEqualityComparer.Default),
+                (IPropertySymbol { IsIndexer: true } l, IPropertySymbol { IsIndexer: true } r) => l.Name == r.Name && l.Parameters.Length == r.Parameters.Length && l.Parameters.Select(x => x.Type).SequenceEqual(r.Parameters.Select(x => x.Type), SymbolEqualityComparer.Default),
+                (IPropertySymbol l, IPropertySymbol r) => l.Name == r.Name && l.Type.Equals(r.Type, SymbolEqualityComparer.Default),
+                (IEventSymbol l, IEventSymbol r) => l.Name == r.Name && l.Type.Equals(r.Type, SymbolEqualityComparer.Default),
+                _ => left.Equals(right, SymbolEqualityComparer.Default),
+            };
 
         /// <summary>
         /// Retrieves the documentation comment ID for a symbol, accounting for its constructed form.
@@ -114,5 +195,19 @@ namespace WinRTWrapper.SourceGenerators.Extensions
                     return symbol.GetDocumentationCommentId();
             }
         }
+
+        /// <summary>
+        /// Returns the negative variance of the specified <see cref="VarianceKind"/>.
+        /// </summary>
+        /// <param name="variance">The <see cref="VarianceKind"/> to negate.</param>
+        /// <returns>The negative variance of the specified <see cref="VarianceKind"/>.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when an invalid <paramref name="variance"/> kind is specified.</exception>
+        public static VarianceKind Negative(this VarianceKind variance) => variance switch
+        {
+            VarianceKind.None => VarianceKind.None,
+            VarianceKind.Out => VarianceKind.In,
+            VarianceKind.In => VarianceKind.Out,
+            _ => throw new ArgumentOutOfRangeException(nameof(variance), variance, "Invalid variance kind specified."),
+        };
     }
 }

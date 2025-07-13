@@ -48,21 +48,6 @@ namespace WinRTWrapper.SourceGenerators.Models
             wrapper = Wrapper;
             target = Target;
         }
-
-        /// <summary>
-        /// Gets the member modifier string for the wrapped symbol.
-        /// </summary>
-        /// <returns>The member modifier string, which includes accessibility, static, and partial definition modifiers.</returns>
-        public string GetMemberModify()
-        {
-            return (Wrapper, Target) switch
-            {
-                (IMethodSymbol wrapper, _) => $"{wrapper.DeclaredAccessibility.FormatToString()} {(wrapper.IsStatic ? "static " : string.Empty)}{(wrapper.IsOverride ? "override " : string.Empty)}{(wrapper.IsVirtual ? "virtual " : string.Empty)}{(wrapper.IsPartialDefinition ? "partial " : string.Empty)}",
-                (IPropertySymbol wrapper, _) => $"{wrapper.DeclaredAccessibility.FormatToString()} {(wrapper.IsStatic ? "static " : string.Empty)}{(wrapper.IsOverride ? "override " : string.Empty)}{(wrapper.IsVirtual ? "virtual " : string.Empty)}{(wrapper.IsPartialDefinition ? "partial " : string.Empty)}",
-                (null, T target) => $"public {(target.IsStatic ? "static " : string.Empty)}",
-                _ => string.Empty
-            };
-        }
     }
 
     /// <summary>
@@ -99,6 +84,48 @@ namespace WinRTWrapper.SourceGenerators.Models
             (IEventSymbol w, IEventSymbol t) => new SymbolWrapper<IEventSymbol>(w, t),
             _ => new SymbolWrapper<T>(wrapper, target),
         };
+
+        /// <summary>
+        /// Gets the member modifier string for the wrapped symbol.
+        /// </summary>
+        /// <param name="wrapper">The symbol wrapper containing the method symbol.</param>
+        /// <returns>The member modifier string, which includes accessibility, static, and partial definition modifiers.</returns>
+        public static string GetMemberModify(this SymbolWrapper<IMethodSymbol> wrapper)
+        {
+            if (wrapper.Wrapper is IMethodSymbol method)
+            {
+                return $"{method.DeclaredAccessibility.FormatToString()} {(method.IsStatic ? "static " : string.Empty)}{(method.IsOverride ? "override " : string.Empty)}{(method.IsVirtual ? "virtual " : string.Empty)}{(method.IsPartialDefinition ? "partial " : string.Empty)}";
+            }
+            return $"public {(wrapper.Target.IsStatic ? "static " : string.Empty)}";
+        }
+
+        /// <summary>
+        /// Gets the member modifier string for the wrapped symbol.
+        /// </summary>
+        /// <param name="wrapper">The symbol wrapper containing the property symbol.</param>
+        /// <returns>The member modifier string, which includes accessibility, static, and partial definition modifiers.</returns>
+        public static string GetMemberModify(this SymbolWrapper<IPropertySymbol> wrapper)
+        {
+            if (wrapper.Wrapper is IPropertySymbol property)
+            {
+                return $"{property.DeclaredAccessibility.FormatToString()} {(property.IsStatic ? "static " : string.Empty)}{(property.IsOverride ? "override " : string.Empty)}{(property.IsVirtual ? "virtual " : string.Empty)}{(property.IsPartialDefinition ? "partial " : string.Empty)}";
+            }
+            return $"public {(wrapper.Target.IsStatic ? "static " : string.Empty)}";
+        }
+
+        /// <summary>
+        /// Gets the member modifier string for the wrapped symbol.
+        /// </summary>
+        /// <param name="wrapper">The symbol wrapper containing the event symbol.</param>
+        /// <returns>The member modifier string, which includes accessibility, static, and partial definition modifiers.</returns>
+        public static string GetMemberModify(this SymbolWrapper<IEventSymbol> wrapper)
+        {
+            if (wrapper.Wrapper is IEventSymbol @event)
+            {
+                return $"{@event.DeclaredAccessibility.FormatToString()} {(@event.IsStatic ? "static " : string.Empty)}{(@event.IsOverride ? "override " : string.Empty)}{(@event.IsVirtual ? "virtual " : string.Empty)}{(@event.IsPartialDefinition ? "partial " : string.Empty)}";
+            }
+            return $"public {(wrapper.Target.IsStatic ? "static " : string.Empty)}";
+        }
     }
 
     /// <summary>

@@ -65,6 +65,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <CompilerVisibleProperty Include="CsWinRTComponent" />
     <CompilerVisibleProperty Include="OutputType" />
   </ItemGroup>
 

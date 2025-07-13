@@ -4,10 +4,10 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
-using System.Reflection.Metadata;
 using System.Text;
 using WinRTWrapper.SourceGenerators.Extensions;
 using WinRTWrapper.SourceGenerators.Models;
+using Enumerable = WinRTWrapper.SourceGenerators.Extensions.Enumerable;
 
 namespace WinRTWrapper.SourceGenerators
 {
@@ -17,8 +17,9 @@ namespace WinRTWrapper.SourceGenerators
         /// Initializes the <see cref="StringBuilder"/> for the generated wrapper class.
         /// </summary>
         /// <param name="source">The source wrapper type.</param>
+        /// <param name="isPublic">Indicates whether the generated member should be public.</param>
         /// <returns>The initialized <see cref="StringBuilder"/>.</returns>
-        private static StringBuilder InitBuilder(in (INamedTypeSymbol, INamedTypeSymbol) source)
+        private static StringBuilder InitBuilder(in (INamedTypeSymbol, INamedTypeSymbol) source, bool isPublic = false)
         {
             StringBuilder builder = new();
             (INamedTypeSymbol symbol, INamedTypeSymbol target) = source;
@@ -35,7 +36,7 @@ namespace WinRTWrapper.SourceGenerators
                             /// Initializes a new instance of the <see cref="{{symbol.GetConstructedFromDocumentationCommentId()}}"/> class with the specified target <see cref="{{target.GetConstructedFromDocumentationCommentId()}}"/> object.
                             /// </summary>
                             /// <param name="target">The target <see cref="{{target.GetConstructedFromDocumentationCommentId()}}"/> object.</param>
-                            internal {{symbol.Name}}({{target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} target)
+                            {{(isPublic ? "public" : "internal")}} {{symbol.Name}}({{target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} target)
                             {
                                 this.target = target;
                             }
@@ -47,29 +48,39 @@ namespace WinRTWrapper.SourceGenerators
                 {
                     if (attribute.ConstructorArguments is [{ Kind: TypedConstantKind.Type, Value: INamedTypeSymbol managedType }, { Kind: TypedConstantKind.Type, Value: INamedTypeSymbol wrapperType }])
                     {
-                        _ = builder.AppendLine(handler:
-                            $$"""
-                                    /// <summary>
-                                    /// Converts a managed type <see cref="{{managedType.GetConstructedFromDocumentationCommentId()}}"/> to a wrapper type <see cref="{{wrapperType.GetConstructedFromDocumentationCommentId()}}"/>.
-                                    /// </summary>
-                                    /// <param name="managed">The managed type to convert.</param>
-                                    /// <returns>The converted wrapper type.</returns>
-                                    internal static {{wrapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} ConvertToWrapper({{managedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} managed)
-                                    {
-                                        return ({{wrapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}})new {{symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}(managed);
-                                    }
+                        if (!symbol.GetMembers().OfType<IMethodSymbol>().Any(x=>x is {Name : "ConvertToWrapper", Parameters.Length:1 } && x.Parameters[0].Type.Equals(managedType, SymbolEqualityComparer.Default)))
+                        {
 
-                                    /// <summary>
-                                    /// Converts a wrapper type <see cref="{{wrapperType.GetConstructedFromDocumentationCommentId()}}"/> to a managed type <see cref="{{managedType.GetConstructedFromDocumentationCommentId()}}"/>.
-                                    /// </summary>
-                                    /// <param name="wrapper">The wrapper type to convert.</param>
-                                    /// <returns>The converted managed type.</returns>
-                                    internal static {{managedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} ConvertToManaged({{wrapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} wrapper)
-                                    {
-                                        return ({{managedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}})(({{symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}})wrapper).target;
-                                    }
+                            _ = builder.AppendLine(handler:
+                                $$"""
+                                        /// <summary>
+                                        /// Converts a managed type <see cref="{{managedType.GetConstructedFromDocumentationCommentId()}}"/> to a wrapper type <see cref="{{wrapperType.GetConstructedFromDocumentationCommentId()}}"/>.
+                                        /// </summary>
+                                        /// <param name="managed">The managed type to convert.</param>
+                                        /// <returns>The converted wrapper type.</returns>
+                                        {{(isPublic ? "public" : "internal")}} static {{wrapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} ConvertToWrapper({{managedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} managed)
+                                        {
+                                            return ({{wrapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}})new {{symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}(managed);
+                                        }
 
-                            """);
+                                 """);
+                        }
+                        if (!symbol.GetMembers().OfType<IMethodSymbol>().Any(x => x is { Name: "ConvertToManaged", Parameters.Length: 1 } && x.Parameters[0].Type.Equals(wrapperType, SymbolEqualityComparer.Default)))
+                        {
+                            _ = builder.AppendLine(handler:
+                                $$"""
+                                        /// <summary>
+                                        /// Converts a wrapper type <see cref="{{wrapperType.GetConstructedFromDocumentationCommentId()}}"/> to a managed type <see cref="{{managedType.GetConstructedFromDocumentationCommentId()}}"/>.
+                                        /// </summary>
+                                        /// <param name="wrapper">The wrapper type to convert.</param>
+                                        /// <returns>The converted managed type.</returns>
+                                        {{(isPublic ? "public" : "internal")}} static {{managedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} ConvertToManaged({{wrapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} wrapper)
+                                        {
+                                            return ({{managedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}})(({{symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}})wrapper).target;
+                                        }
+
+                                """);
+                        }
                     }
                 }
             }
@@ -104,7 +115,7 @@ namespace WinRTWrapper.SourceGenerators
                     }
                     break;
                 case { MethodKind: MethodKind.Ordinary }:
-                    MarshalType returnType = GetWrapperType([.. wrapper?.GetReturnTypeAttributes() ?? [], .. method.GetReturnTypeAttributes()], marshals, method.ReturnType, wrapper?.ReturnType);
+                    MarshalType returnType = GetWrapperType(Enumerable.Unwrap(wrapper?.GetReturnTypeAttributes(), method.GetReturnTypeAttributes()), marshals, method.ReturnType, wrapper?.ReturnType, VarianceKind.Out);
                     static bool CheckArgs(ImmutableArray<ITypeSymbol> arguments, ImmutableArray<IParameterSymbol> parameters)
                     {
                         if (parameters.Length >= arguments.Length)
@@ -130,7 +141,7 @@ namespace WinRTWrapper.SourceGenerators
                             (IMethodSymbol? wrapper, IMethodSymbol target) = source;
                             if (wrapper == null)
                             {
-                                return method.Parameters[..^arguments.Length].Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type), x.Name));
+                                return method.Parameters[..^arguments.Length].Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type, null, VarianceKind.In), x.Name));
                             }
                             else
                             {
@@ -140,7 +151,7 @@ namespace WinRTWrapper.SourceGenerators
                                     {
                                         IParameterSymbol wrapperParam = wrapper.Parameters[i];
                                         IParameterSymbol targetParam = target.Parameters[i];
-                                        yield return (GetWrapperType([.. wrapperParam.GetAttributes(), .. targetParam.GetAttributes()], marshals, targetParam.Type, wrapperParam.Type), wrapperParam.Name);
+                                        yield return (GetWrapperType(Enumerable.Unwrap(wrapperParam.GetAttributes(), targetParam.GetAttributes()), marshals, targetParam.Type, wrapperParam.Type, VarianceKind.In), wrapperParam.Name);
                                     }
                                 }
                                 return GetParameters(wrapper, target);
@@ -178,7 +189,7 @@ namespace WinRTWrapper.SourceGenerators
                             (IMethodSymbol? wrapper, IMethodSymbol target) = source;
                             if (wrapper == null)
                             {
-                                return method.Parameters.Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type), x.Name));
+                                return method.Parameters.Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type, null, VarianceKind.In), x.Name));
                             }
                             else
                             {
@@ -188,7 +199,7 @@ namespace WinRTWrapper.SourceGenerators
                                     {
                                         IParameterSymbol wrapperParam = wrapper.Parameters[i];
                                         IParameterSymbol targetParam = target.Parameters[i];
-                                        yield return (GetWrapperType([.. wrapperParam.GetAttributes(), .. targetParam.GetAttributes()], marshals, targetParam.Type, wrapperParam.Type), wrapperParam.Name);
+                                        yield return (GetWrapperType(Enumerable.Unwrap(wrapperParam.GetAttributes(), targetParam.GetAttributes()), marshals, targetParam.Type, wrapperParam.Type, VarianceKind.In), wrapperParam.Name);
                                     }
                                 }
                                 return GetParameters(wrapper, target);
@@ -235,8 +246,8 @@ namespace WinRTWrapper.SourceGenerators
                             && x.TypeArguments[0].Equals(property.Parameters[0].Type, SymbolEqualityComparer.Default)
                             && x.TypeArguments[1].Equals(property.Type, SymbolEqualityComparer.Default)))))
                     {
-                        MarshalType returnType = GetWrapperType(property.GetAttributes(), marshals, property.Type);
-                        ImmutableArray<(MarshalType marshal, string name)> parameters = [.. property.Parameters.Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type), x.Name))];
+                        MarshalType returnType = GetWrapperType(Enumerable.Unwrap(wrapper?.GetAttributes(), property.GetAttributes()), marshals, property.Type, wrapper?.Type, VarianceKind.Out);
+                        ImmutableArray<(MarshalType marshal, string name)> parameters = [.. property.Parameters.Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type, null, VarianceKind.In), x.Name))];
                         _ = builder.AppendLine(handler:
                             $$"""
                                     /// <inheritdoc cref="{{property.GetConstructedFromDocumentationCommentId()}}"/>
@@ -266,7 +277,13 @@ namespace WinRTWrapper.SourceGenerators
                     }
                     return builder;
                 default:
-                    MarshalType marshal = GetWrapperType(property.GetAttributes(), marshals, property.Type);
+                    VarianceKind variance = property switch
+                    {
+                        { IsReadOnly: true } => VarianceKind.Out,
+                        { IsWriteOnly: true } => VarianceKind.In,
+                        _ => VarianceKind.None
+                    };
+                    MarshalType marshal = GetWrapperType(Enumerable.Unwrap(wrapper?.GetAttributes(), property.GetAttributes()), marshals, property.Type, wrapper?.Type, variance);
                     _ = builder.AppendLine(handler:
                         $$"""
                                 /// <inheritdoc cref="{{property.GetConstructedFromDocumentationCommentId()}}"/>
@@ -281,7 +298,6 @@ namespace WinRTWrapper.SourceGenerators
                     {
                         _ = builder.AppendLine(handler:
                             $$"""
-                            
                                         set
                                         {
                                             {{target.GetMemberTarget(property)}}.{{property.Name}} = {{marshal.ConvertToManaged("value")}};
@@ -308,7 +324,7 @@ namespace WinRTWrapper.SourceGenerators
         {
             (INamedTypeSymbol symbol, INamedTypeSymbol target, IEventSymbol? wrapper, IEventSymbol @event) = source;
             IMethodSymbol invoke = @event.Type.GetMembers().OfType<IMethodSymbol>().FirstOrDefault(x => x.Name == "Invoke");
-            MarshalType marshal = GetWrapperType(@event.GetAttributes(), options.Marshals, @event.Type);
+            MarshalType marshal = GetWrapperType(Enumerable.Unwrap(wrapper?.GetAttributes(), @event.GetAttributes()), options.Marshals, @event.Type, wrapper?.Type, VarianceKind.None);
             switch ((options, marshal))
             {
                 case ({ IsWinMDObject: true }, { HasConversion: true }):
@@ -446,9 +462,9 @@ namespace WinRTWrapper.SourceGenerators
         /// <param name="attributes">The attributes of the type.</param>
         /// <param name="original">The original type symbol.</param>
         /// <returns>The wrapper type and its marshaller if applicable.</returns>
-        private static MarshalType GetWrapperType(IEnumerable<AttributeData> attributes, ImmutableArray<MarshalType> marshals, ITypeSymbol original, ITypeSymbol? expect = null)
+        private static MarshalType GetWrapperType(IEnumerable<AttributeData> attributes, ImmutableArray<MarshalType> marshals, ITypeSymbol original, ITypeSymbol? expect = null, VarianceKind variance = VarianceKind.None)
         {
-            static bool GetWrapperType(IEnumerable<AttributeData> attributes, string name, ITypeSymbol original, ITypeSymbol? expect, [NotNullWhen(true)] out MarshalType? marshal)
+            static bool GetWrapperType(IEnumerable<AttributeData> attributes, string name, ITypeSymbol original, ITypeSymbol? expect, VarianceKind variance, [NotNullWhen(true)] out MarshalType? marshal)
             {
                 if (attributes.FirstOrDefault(x =>
                     x.AttributeClass?.Name == name
@@ -459,7 +475,7 @@ namespace WinRTWrapper.SourceGenerators
                         x.AttributeClass is { Name: nameof(WinRTWrapperMarshallerAttribute) }
                         && x.AttributeClass.ContainingNamespace.ToDisplayString() == namespaceName)
                         is { ConstructorArguments: [{ Kind: TypedConstantKind.Type, Value: INamedTypeSymbol managed }, { Kind: TypedConstantKind.Type, Value: INamedTypeSymbol wrapper }] }
-                        && original.IsSubclassOf(managed) && expect?.IsSubclassOf(wrapper) != false)
+                        && CheckSuitable(managed, wrapper, original, expect, variance))
                     {
                         marshal = new MarshalType(
                             managed,
@@ -473,13 +489,13 @@ namespace WinRTWrapper.SourceGenerators
                 return false;
             }
 
-            static bool IsWrapper(ITypeSymbol original, ITypeSymbol expect, [NotNullWhen(true)] out MarshalType? marshal)
+            static bool GetWrapperTypeByExpect(ITypeSymbol original, ITypeSymbol expect, VarianceKind variance, [NotNullWhen(true)] out MarshalType? marshal)
             {
                 if (expect.GetAttributes().FirstOrDefault(x =>
                     x.AttributeClass is { Name: nameof(WinRTWrapperMarshallerAttribute) }
                     && x.AttributeClass.ContainingNamespace.ToDisplayString() == namespaceName)
                     is { ConstructorArguments: [{ Kind: TypedConstantKind.Type, Value: INamedTypeSymbol managed }, { Kind: TypedConstantKind.Type, Value: INamedTypeSymbol wrapper }] }
-                    && original.IsSubclassOf(managed) && expect.IsSubclassOf(wrapper) != false)
+                    && CheckSuitable(managed, wrapper, original, expect, variance))
                 {
                     marshal = new MarshalType(
                         managed,
@@ -492,9 +508,9 @@ namespace WinRTWrapper.SourceGenerators
                 return false;
             }
 
-            static bool GetMarshalType(ImmutableArray<MarshalType> marshals, ITypeSymbol original, ITypeSymbol? expect, [NotNullWhen(true)] out MarshalType? marshal)
+            static bool GetMarshalType(ImmutableArray<MarshalType> marshals, ITypeSymbol original, ITypeSymbol? expect, VarianceKind variance, [NotNullWhen(true)] out MarshalType? marshal)
             {
-                if (marshals.FirstOrDefault(x => original.IsSubclassOf(x.ManagedType) && expect?.IsSubclassOf(x.WrapperType) != false) is MarshalType marshier)
+                if (marshals.FirstOrDefault(x => CheckSuitable(x.ManagedType, x.WrapperType, original, expect, variance)) is MarshalType marshier)
                 {
                     if (marshier is IMarshalGenericType generic && original is INamedTypeSymbol symbol)
                     {
@@ -507,10 +523,22 @@ namespace WinRTWrapper.SourceGenerators
                 return false;
             }
 
-            return GetWrapperType(attributes, nameof(WinRTWrapperMarshalUsingAttribute), original, expect, out MarshalType? marshal) ? marshal
-                : GetWrapperType(original.GetAttributes(), nameof(WinRTWrapperMarshallingAttribute), original, expect, out marshal) ? marshal
-                : expect != null && IsWrapper(original, expect, out marshal) ? marshal
-                : GetMarshalType(marshals, original, expect, out marshal) ? marshal
+            static bool CheckSuitable(ITypeSymbol managed, ITypeSymbol wrapper, ITypeSymbol original, ITypeSymbol? expect, VarianceKind variance = VarianceKind.None)
+            {
+                if (wrapper is INamedTypeSymbol { IsGenericType: true })
+                {
+                    if (original is not INamedTypeSymbol { IsGenericType: true } && expect is not INamedTypeSymbol { IsGenericType: true })
+                    {
+                        return false;
+                    }
+                }
+                return original.IsSuitable(managed, variance) && expect?.IsSuitable(wrapper, variance.Negative()) != false;
+            }
+
+            return GetWrapperType(attributes, nameof(WinRTWrapperMarshalUsingAttribute), original, expect, variance, out MarshalType? marshal) ? marshal
+                : GetWrapperType(original.GetAttributes(), nameof(WinRTWrapperMarshallingAttribute), original, expect, variance, out marshal) ? marshal
+                : expect != null && GetWrapperTypeByExpect(original, expect, variance, out marshal) ? marshal
+                : GetMarshalType(marshals, original, expect, variance, out marshal) ? marshal
                 : new MarshalType(original, original);
         }
     }
