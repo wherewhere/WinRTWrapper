@@ -145,7 +145,7 @@ namespace WinRTWrapper.SourceGenerators.Helpers
 
         /// <inheritdoc/>
         [MemberNotNull(nameof(writer))]
-        readonly IEnumerator IEnumerable.GetEnumerator() => ((IEnumerable)writer!).GetEnumerator();
+        readonly IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
         /// <summary>
         /// Gets the underlying <see cref="IEnumerable{T}"/> instance containing the written items.
@@ -279,13 +279,7 @@ namespace WinRTWrapper.SourceGenerators.Helpers
             }
 
             /// <inheritdoc/>
-            public IEnumerator<T> GetEnumerator()
-            {
-                for (int i = 0; i < index; i++)
-                {
-                    yield return array![i];
-                }
-            }
+            public IEnumerator<T> GetEnumerator() => new Enumerator(array!, index);
 
             /// <inheritdoc/>
             public int IndexOf(T item) => Array.IndexOf(array, item);
@@ -371,6 +365,62 @@ namespace WinRTWrapper.SourceGenerators.Helpers
                 array = newArray;
 
                 ArrayPool<T>.Shared.Return(oldArray, clearArray: typeof(T) != typeof(char));
+            }
+
+            /// <summary>
+            /// An enumerator for the <see cref="Writer"/> class.
+            /// </summary>
+            /// <param name="array">The underlying array to enumerate.</param>
+            /// <param name="count">The number of items in the array to enumerate.</param>
+            public struct Enumerator(T[] array, int count) : IEnumerator<T>
+            {
+                /// <summary>
+                /// The index of the last item returned by <see cref="MoveNext"/>.
+                /// </summary>
+                private int _index = -1;
+
+                /// <inheritdoc/>
+                public bool MoveNext()
+                {
+                    int index = _index + 1;
+                    if (index >= count)
+                    {
+                        _index = count;
+                        return false;
+                    }
+                    _index = index;
+                    return true;
+                }
+
+                /// <inheritdoc/>
+                public readonly T Current
+                {
+                    get
+                    {
+                        int index = _index;
+                        if (index >= count)
+                        {
+                            if (index < 0)
+                            {
+                                throw new InvalidOperationException("Enumeration has not started. Call MoveNext.");
+                            }
+                            else
+                            {
+                                throw new InvalidOperationException("Enumeration already finished.");
+                            }
+                        }
+                        return array[index];
+                    }
+                }
+
+                /// <inheritdoc/>
+                readonly object? IEnumerator.Current => Current;
+
+                /// <inheritdoc/>
+                void IEnumerator.Reset() => _index = -1;
+
+                /// <inheritdoc/>
+                readonly void IDisposable.Dispose() { }
             }
         }
     }
