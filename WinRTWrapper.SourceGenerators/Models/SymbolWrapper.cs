@@ -1,4 +1,5 @@
 ﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using WinRTWrapper.SourceGenerators.Extensions;
 
 namespace WinRTWrapper.SourceGenerators.Models
@@ -90,13 +91,21 @@ namespace WinRTWrapper.SourceGenerators.Models
         /// </summary>
         /// <param name="wrapper">The symbol wrapper containing the method symbol.</param>
         /// <returns>The member modifier string, which includes accessibility, static, and partial definition modifiers.</returns>
-        public static string GetMemberModify(this SymbolWrapper<IMethodSymbol> wrapper)
+        public static SyntaxTokenList GetMemberModify(this SymbolWrapper<IMethodSymbol> wrapper)
         {
+            SyntaxTokenList list = SyntaxFactory.TokenList();
             if (wrapper.Wrapper is IMethodSymbol method)
             {
-                return $"{method.DeclaredAccessibility.FormatToString()} {(method.IsStatic ? "static " : string.Empty)}{(method.IsOverride ? "override " : string.Empty)}{(method.IsVirtual ? "virtual " : string.Empty)}{(method.IsPartialDefinition ? "partial " : string.Empty)}";
+                list = list.AddAccessibility(method.DeclaredAccessibility);
+                if (method.IsStatic) { list = list.Add(SyntaxFactory.Token(SyntaxKind.StaticKeyword)); }
+                if (method.IsOverride) { list = list.Add(SyntaxFactory.Token(SyntaxKind.OverrideKeyword)); }
+                if (method.IsVirtual) { list = list.Add(SyntaxFactory.Token(SyntaxKind.VirtualKeyword)); }
+                if (method.IsPartialDefinition) { list = list.Add(SyntaxFactory.Token(SyntaxKind.PartialKeyword)); }
+                return list;
             }
-            return $"public {(wrapper.Target.IsStatic ? "static " : string.Empty)}";
+            list = list.Add(SyntaxFactory.Token(SyntaxKind.PublicKeyword));
+            if (wrapper.Target.IsStatic) { list = list.Add(SyntaxFactory.Token(SyntaxKind.StaticKeyword)); }
+            return list;
         }
 
         /// <summary>

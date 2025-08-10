@@ -1,4 +1,5 @@
 ﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -24,6 +25,25 @@ namespace WinRTWrapper.SourceGenerators.Extensions
             Accessibility.Internal or Accessibility.Friend => "internal",
             Accessibility.ProtectedOrInternal or Accessibility.ProtectedOrFriend => "protected internal",
             Accessibility.Public => "public",
+            _ => throw new ArgumentOutOfRangeException(nameof(accessibility), accessibility, null),
+        };
+
+        /// <summary>
+        /// Adds the appropriate accessibility modifier token(s) to the given <see cref="SyntaxTokenList"/>.
+        /// </summary>
+        /// <param name="list">The <see cref="SyntaxTokenList"/> to which the accessibility modifier(s) will be added.</param>
+        /// <param name="accessibility">The <see cref="Accessibility"/> value representing the desired accessibility level.</param>
+        /// <returns>The updated <see cref="SyntaxTokenList"/> with the added accessibility modifier token(s).</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown when the <paramref name="accessibility"/> value is not recognized.</exception>
+        public static SyntaxTokenList AddAccessibility(this in SyntaxTokenList list, Accessibility accessibility) => accessibility switch
+        {
+            Accessibility.NotApplicable => list.Add(SyntaxFactory.Token(SyntaxKind.None)),
+            Accessibility.Private => list.Add(SyntaxFactory.Token(SyntaxKind.PrivateKeyword)),
+            Accessibility.ProtectedAndInternal or Accessibility.ProtectedAndFriend => list.AddRange([SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ProtectedKeyword)]),
+            Accessibility.Protected => list.Add(SyntaxFactory.Token(SyntaxKind.ProtectedKeyword)),
+            Accessibility.Internal or Accessibility.Friend => list.Add(SyntaxFactory.Token(SyntaxKind.InternalKeyword)),
+            Accessibility.ProtectedOrInternal or Accessibility.ProtectedOrFriend => list.AddRange([SyntaxFactory.Token(SyntaxKind.ProtectedKeyword), SyntaxFactory.Token(SyntaxKind.InternalKeyword)]),
+            Accessibility.Public => list.Add(SyntaxFactory.Token(SyntaxKind.PublicKeyword)),
             _ => throw new ArgumentOutOfRangeException(nameof(accessibility), accessibility, null),
         };
 

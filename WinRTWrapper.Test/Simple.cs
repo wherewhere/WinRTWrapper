@@ -482,14 +482,104 @@ namespace WinRTWrapper.Test
     }
 
     /// <summary>
+    /// Struct <see cref="StructSimple"/> is a simple structure that contains properties and methods.
+    /// </summary>
+    internal struct StructSimple
+    {
+        /// <summary>
+        /// Field that holds an integer value.
+        /// </summary>
+        private int _field;
+
+        /// <summary>
+        /// Gets or sets the value at the specified index.
+        /// </summary>
+        /// <param name="index">The index of the value to get or set.</param>
+        /// <returns>The value at the specified index.</returns>
+        public int this[int index]
+        {
+            get
+            {
+                return _field;
+            }
+            set
+            {
+                _field = value;
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets the value of <see cref="_field"/>.
+        /// </summary>
+        public int Property
+        {
+            get
+            {
+                return _field;
+            }
+            set
+            {
+                _field = value;
+            }
+        }
+
+        /// <summary>
+        /// Gets the value of <see cref="_field"/> without allowing modification.
+        /// </summary>
+        public int ReadonlyProperty
+        {
+            get
+            {
+                return _field;
+            }
+        }
+
+        /// <summary>
+        /// Retrieves the value of the private field <see cref="_field"/>.
+        /// </summary>
+        /// <returns>The integer value stored in the field <see cref="_field"/>.</returns>
+        public int Method()
+        {
+            return _field;
+        }
+
+        /// <summary>
+        /// Performs an operation that does not return a value.
+        /// </summary>
+        public void VoidMethod()
+        {
+            InternalMethod();
+        }
+
+        /// <summary>
+        /// Executes an internal operation that does not return a value.
+        /// </summary>
+        internal void InternalMethod()
+        {
+            if (Event != null)
+            {
+                Event(this, _field);
+            }
+        }
+
+        /// <summary>
+        /// Occurs when the associated action is triggered, providing an integer value as event data.
+        /// </summary>
+        public event EventHandler<int> Event;
+    }
+
+    /// <summary>
     /// Class <see cref="SimpleBase"/> serves as a base class with properties and methods.
     /// </summary>
-    internal class SimpleBase
+    internal partial class SimpleBase : IDisposable
     {
         /// <summary>
         /// Gets or sets the value of a property.
         /// </summary>
         public int Property { get; set; }
+
+        /// <inheritdoc/>
+        public void Dispose() => GC.SuppressFinalize(this);
 
         /// <summary>
         /// Retrieves the value of a private field.
@@ -584,13 +674,23 @@ namespace WinRTWrapper.Test
     [GenerateWinRTWrapper(typeof(StaticSimple))]
     public static partial class StaticSimpleWrapper { }
 
+    [WinRTWrapperMarshaller(typeof(StructSimple), typeof(StructSimpleWrapper))]
+    [GenerateWinRTWrapper(typeof(StructSimple))]
+    public sealed partial class StructSimpleWrapper { }
+
     [WinRTWrapperMarshaller(typeof(SimpleBase), typeof(SimpleBaseWrapper))]
     [GenerateWinRTWrapper(typeof(SimpleBase))]
-    public sealed partial class SimpleBaseWrapper { }
+    public sealed partial class SimpleBaseWrapper : IDisposable
+    {
+        public partial void Dispose();
+    }
 
     [WinRTWrapperMarshaller(typeof(SimpleSub), typeof(SimpleSubWrapper))]
     [GenerateWinRTWrapper(typeof(SimpleSub))]
-    public sealed partial class SimpleSubWrapper { }
+    public sealed partial class SimpleSubWrapper : IDisposable
+    {
+        public partial void Dispose();
+    }
 
     [WinRTWrapperMarshaller(typeof(Simple), typeof(DefinedSimpleWrapper))]
     [GenerateWinRTWrapper(typeof(Simple), GenerateMember.Defined)]

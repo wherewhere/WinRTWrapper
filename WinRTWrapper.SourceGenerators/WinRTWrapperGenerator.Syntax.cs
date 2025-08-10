@@ -1,4 +1,6 @@
 ﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -14,34 +16,61 @@ namespace WinRTWrapper.SourceGenerators
     public partial class WinRTWrapperGenerator
     {
         /// <summary>
-        /// Initializes the <see cref="StringBuilder"/> for the generated wrapper class.
+        /// Gets the <see cref="MemberDeclarationSyntax"/> for initializing a wrapper class based on the provided <paramref name="source"/> type.
         /// </summary>
         /// <param name="source">The source wrapper type.</param>
         /// <param name="isPublic">Indicates whether the generated member should be public.</param>
-        /// <returns>The initialized <see cref="StringBuilder"/>.</returns>
-        private static StringBuilder InitBuilder(in (INamedTypeSymbol, INamedTypeSymbol) source, bool isPublic = false)
+        /// <returns>The <see cref="MemberDeclarationSyntax"/> representing the initialization of the wrapper class.</returns>
+        private static IEnumerable<MemberDeclarationSyntax> InitBuilder((INamedTypeSymbol, INamedTypeSymbol) source, bool isPublic = false)
         {
             StringBuilder builder = new();
             (INamedTypeSymbol symbol, INamedTypeSymbol target) = source;
             if (!target.IsStatic)
             {
-                _ = builder.AppendLine(handler:
-                    $$"""
-                            /// <summary>
-                            /// The target <see cref="{{target.GetConstructedFromDocumentationCommentId()}}"/> object of the wrapper.
-                            /// </summary>
-                            private readonly {{target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} target;
+                yield return SyntaxFactory.FieldDeclaration(
+                    default,
+                    target is { IsReferenceType: true } or { IsReadOnly: true } ? 
+                        SyntaxFactory.TokenList(
+                            SyntaxFactory.Token(SyntaxKind.PrivateKeyword),
+                            SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword)):
+                        SyntaxFactory.TokenList(
+                            SyntaxFactory.Token(SyntaxKind.PrivateKeyword)),
+                    SyntaxFactory.VariableDeclaration(
+                        SyntaxFactory.IdentifierName(target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                        SyntaxFactory.SingletonSeparatedList(SyntaxFactory.VariableDeclarator(SyntaxFactory.Identifier("target")))))
+                    .WithLeadingTrivia(
+                        SyntaxFactory.TriviaList(
+                            SyntaxFactory.Comment("/// <summary>"),
+                            SyntaxFactory.Comment($"/// The target <see cref=\"{target.GetConstructedFromDocumentationCommentId()}\"/> object of the wrapper."),
+                            SyntaxFactory.Comment("/// </summary>")));
 
-                            /// <summary>
-                            /// Initializes a new instance of the <see cref="{{symbol.GetConstructedFromDocumentationCommentId()}}"/> class with the specified target <see cref="{{target.GetConstructedFromDocumentationCommentId()}}"/> object.
-                            /// </summary>
-                            /// <param name="target">The target <see cref="{{target.GetConstructedFromDocumentationCommentId()}}"/> object.</param>
-                            {{(isPublic ? "public" : "internal")}} {{symbol.Name}}({{target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} target)
-                            {
-                                this.target = target;
-                            }
+                yield return SyntaxFactory.ConstructorDeclaration(
+                    default,
+                    SyntaxFactory.TokenList(isPublic ? SyntaxFactory.Token(SyntaxKind.PublicKeyword) : SyntaxFactory.Token(SyntaxKind.InternalKeyword)),
+                    SyntaxFactory.Identifier(symbol.Name),
+                    SyntaxFactory.ParameterList(
+                        SyntaxFactory.SingletonSeparatedList(
+                            SyntaxFactory.Parameter(
+                                default,
+                                target.IsValueType ? SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.InKeyword)) : default,
+                                SyntaxFactory.IdentifierName(target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                SyntaxFactory.Identifier("target"),
+                                default))),
+                    default,
+                    SyntaxFactory.Block(
+                        SyntaxFactory.SingletonList<StatementSyntax>(
+                            SyntaxFactory.ExpressionStatement(
+                                SyntaxFactory.AssignmentExpression(
+                                    SyntaxKind.SimpleAssignmentExpression,
+                                    SyntaxFactory.IdentifierName("this.target"),
+                                    SyntaxFactory.IdentifierName("target"))))))
+                    .WithLeadingTrivia(
+                        SyntaxFactory.TriviaList(
+                            SyntaxFactory.Comment("/// <summary>"),
+                            SyntaxFactory.Comment($"/// Initializes a new instance of the <see cref=\"{symbol.GetConstructedFromDocumentationCommentId()}\"/> class with the specified target <see cref=\"{target.GetConstructedFromDocumentationCommentId()}\"/> object."),
+                            SyntaxFactory.Comment("/// </summary>"),
+                            SyntaxFactory.Comment($"/// <param name=\"target\">The target <see cref=\"{target.GetConstructedFromDocumentationCommentId()}\"/> object.</param>")));
 
-                    """);
                 foreach (AttributeData attribute in symbol.GetAttributes().Where(x =>
                     x.AttributeClass is { Name: nameof(WinRTWrapperMarshallerAttribute) }
                     && x.AttributeClass.ContainingNamespace.ToDisplayString() == namespaceName))
@@ -50,61 +79,92 @@ namespace WinRTWrapper.SourceGenerators
                     {
                         if (!symbol.GetMembers().OfType<IMethodSymbol>().Any(x=>x is {Name : "ConvertToWrapper", Parameters.Length:1 } && x.Parameters[0].Type.Equals(managedType, SymbolEqualityComparer.Default)))
                         {
-
-                            _ = builder.AppendLine(handler:
-                                $$"""
-                                        /// <summary>
-                                        /// Converts a managed type <see cref="{{managedType.GetConstructedFromDocumentationCommentId()}}"/> to a wrapper type <see cref="{{wrapperType.GetConstructedFromDocumentationCommentId()}}"/>.
-                                        /// </summary>
-                                        /// <param name="managed">The managed type to convert.</param>
-                                        /// <returns>The converted wrapper type.</returns>
-                                        {{(isPublic ? "public" : "internal")}} static {{wrapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} ConvertToWrapper({{managedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} managed)
-                                        {
-                                            return ({{wrapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}})new {{symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}(managed);
-                                        }
-
-                                 """);
+                            yield return SyntaxFactory.MethodDeclaration(
+                                default,
+                                SyntaxFactory.TokenList(
+                                    isPublic ? SyntaxFactory.Token(SyntaxKind.PublicKeyword) : SyntaxFactory.Token(SyntaxKind.InternalKeyword),
+                                    SyntaxFactory.Token(SyntaxKind.StaticKeyword)),
+                                SyntaxFactory.IdentifierName(wrapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                default,
+                                SyntaxFactory.Identifier("ConvertToWrapper"),
+                                default,
+                                SyntaxFactory.ParameterList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Parameter(
+                                            default,
+                                            managedType.IsValueType ? SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.InKeyword)) : default,
+                                            SyntaxFactory.IdentifierName(managedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                            SyntaxFactory.Identifier("managed"),
+                                            default))),
+                                default,
+                                SyntaxFactory.Block(
+                                    SyntaxFactory.SingletonList<StatementSyntax>(
+                                        SyntaxFactory.ReturnStatement(
+                                            SyntaxFactory.CastExpression(
+                                                SyntaxFactory.IdentifierName(wrapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                                SyntaxFactory.ObjectCreationExpression(
+                                                    SyntaxFactory.IdentifierName(symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                                    SyntaxFactory.ArgumentList(SyntaxFactory.SingletonSeparatedList(SyntaxFactory.Argument(SyntaxFactory.IdentifierName("managed")))),
+                                                    default))))),
+                                expressionBody: default)
+                                .WithLeadingTrivia(
+                                    SyntaxFactory.TriviaList(
+                                        SyntaxFactory.Comment("/// <summary>"),
+                                        SyntaxFactory.Comment($"/// Converts a managed type <see cref=\"{managedType.GetConstructedFromDocumentationCommentId()}\"/> to a wrapper type <see cref=\"{wrapperType.GetConstructedFromDocumentationCommentId()}\"/>."),
+                                        SyntaxFactory.Comment("/// </summary>"),
+                                        SyntaxFactory.Comment("/// <param name=\"managed\">The managed type to convert.</param>"),
+                                        SyntaxFactory.Comment("/// <returns>The converted wrapper type.</returns>")));
                         }
                         if (!symbol.GetMembers().OfType<IMethodSymbol>().Any(x => x is { Name: "ConvertToManaged", Parameters.Length: 1 } && x.Parameters[0].Type.Equals(wrapperType, SymbolEqualityComparer.Default)))
                         {
-                            _ = builder.AppendLine(handler:
-                                $$"""
-                                        /// <summary>
-                                        /// Converts a wrapper type <see cref="{{wrapperType.GetConstructedFromDocumentationCommentId()}}"/> to a managed type <see cref="{{managedType.GetConstructedFromDocumentationCommentId()}}"/>.
-                                        /// </summary>
-                                        /// <param name="wrapper">The wrapper type to convert.</param>
-                                        /// <returns>The converted managed type.</returns>
-                                        {{(isPublic ? "public" : "internal")}} static {{managedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} ConvertToManaged({{wrapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} wrapper)
-                                        {
-                                            return ({{managedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}})(({{symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}})wrapper).target;
-                                        }
-
-                                """);
+                            yield return SyntaxFactory.MethodDeclaration(
+                                default,
+                                SyntaxFactory.TokenList(
+                                    isPublic ? SyntaxFactory.Token(SyntaxKind.PublicKeyword) : SyntaxFactory.Token(SyntaxKind.InternalKeyword),
+                                    SyntaxFactory.Token(SyntaxKind.StaticKeyword)),
+                                SyntaxFactory.IdentifierName(managedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                default,
+                                SyntaxFactory.Identifier("ConvertToManaged"),
+                                default,
+                                SyntaxFactory.ParameterList(SyntaxFactory.SingletonSeparatedList(SyntaxFactory.Parameter(SyntaxFactory.Identifier("wrapper")).WithType(SyntaxFactory.IdentifierName(wrapperType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))))),
+                                default,
+                                SyntaxFactory.Block(
+                                    SyntaxFactory.SingletonList<StatementSyntax>(
+                                        SyntaxFactory.ReturnStatement(
+                                            SyntaxFactory.CastExpression(
+                                                SyntaxFactory.IdentifierName(managedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                                SyntaxFactory.MemberAccessExpression(
+                                                    SyntaxKind.SimpleMemberAccessExpression,
+                                                    SyntaxFactory.ParenthesizedExpression(
+                                                        SyntaxFactory.CastExpression(
+                                                            SyntaxFactory.IdentifierName(symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                                            SyntaxFactory.IdentifierName("wrapper").WithLeadingTrivia(SyntaxFactory.Space))),
+                                                    SyntaxFactory.IdentifierName("target")))))),
+                                expressionBody: default)
+                                .WithLeadingTrivia(
+                                    SyntaxFactory.TriviaList(
+                                        SyntaxFactory.Comment("/// <summary>"),
+                                        SyntaxFactory.Comment($"/// Converts a wrapper type <see cref=\"{wrapperType.GetConstructedFromDocumentationCommentId()}\"/> to a managed type <see cref=\"{managedType.GetConstructedFromDocumentationCommentId()}\"/>."),
+                                        SyntaxFactory.Comment("/// </summary>"),
+                                        SyntaxFactory.Comment("/// <param name=\"wrapper\">The wrapper type to convert.</param>"),
+                                        SyntaxFactory.Comment("/// <returns>The converted managed type.</returns>")));
                         }
                     }
                 }
             }
-            return builder;
         }
 
         /// <summary>
-        /// Adds a <paramref name="method"/> to the generated wrapper class.
+        /// Gets the <see cref="BaseMethodDeclarationSyntax?"/> for a given <paramref name="source"/> method symbol.
         /// </summary>
-        /// <param name="source">The method symbol to add.</param>
-        /// <param name="builder">The <see cref="StringBuilder"/> to append the method code to.</param>
-        /// <returns>The updated <see cref="StringBuilder"/> with the method code added.</returns>
-        private static StringBuilder AddMethod(SymbolWrapper<IMethodSymbol> source, StringBuilder builder, ImmutableArray<MarshalType> marshals, ref bool? needConstructor)
+        /// <param name="source">The method symbol to process.</param>
+        /// <returns>The <see cref="BaseMethodDeclarationSyntax?"/> representing the method.</returns>
+        private static BaseMethodDeclarationSyntax? AddMethod(SymbolWrapper<IMethodSymbol> source, ImmutableArray<MarshalType> marshals, ref bool? needConstructor)
         {
             (INamedTypeSymbol symbol, INamedTypeSymbol target, IMethodSymbol? wrapper, IMethodSymbol method) = source;
             switch (method)
             {
                 case { MethodKind: MethodKind.Constructor }:
-                    _ = builder.AppendLine(handler:
-                        $$"""
-                                /// <inheritdoc cref="{{method.GetConstructedFromDocumentationCommentId()}}"/>
-                                {{source.GetMemberModify()}}{{symbol.Name}}({{string.Join(" ", method.Parameters.Select(x => x.ToDisplayString()))}}) : this(new {{target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}({{string.Join(", ", method.Parameters.Select(x => x.Name))}})) { }
-
-                        """);
                     if (method.Parameters.Length == 0)
                     {
                         needConstructor = false;
@@ -113,7 +173,26 @@ namespace WinRTWrapper.SourceGenerators
                     {
                         needConstructor ??= true;
                     }
-                    break;
+                    return SyntaxFactory.ConstructorDeclaration(
+                        default,
+                        SyntaxFactory.TokenList(source.GetMemberModify()),
+                        SyntaxFactory.Identifier(symbol.Name),
+                        SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(method.Parameters.Select(x => SyntaxFactory.Parameter(SyntaxFactory.Identifier(x.Name)).WithType(SyntaxFactory.IdentifierName(x.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)))))),
+                        SyntaxFactory.ConstructorInitializer(
+                            SyntaxKind.ThisConstructorInitializer,
+                            SyntaxFactory.ArgumentList(
+                                SyntaxFactory.SingletonSeparatedList(
+                                    SyntaxFactory.Argument(
+                                        default,
+                                        default,
+                                        SyntaxFactory.ObjectCreationExpression(
+                                            SyntaxFactory.IdentifierName(target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                            SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(method.Parameters.Select(x => SyntaxFactory.Argument(SyntaxFactory.IdentifierName(x.Name))))),
+                                            default))))),
+                        SyntaxFactory.Block())
+                        .WithLeadingTrivia(
+                            SyntaxFactory.TriviaList(
+                                SyntaxFactory.Comment($"/// <inheritdoc cref=\"{method.GetConstructedFromDocumentationCommentId()}\"/>")));
                 case { MethodKind: MethodKind.Ordinary }:
                     MarshalType returnType = GetWrapperType(Enumerable.Unwrap(wrapper?.GetReturnTypeAttributes(), method.GetReturnTypeAttributes()), marshals, method.ReturnType, wrapper?.ReturnType, VarianceKind.Out);
                     static bool CheckArgs(ImmutableArray<ITypeSymbol> arguments, ImmutableArray<IParameterSymbol> parameters)
@@ -157,29 +236,53 @@ namespace WinRTWrapper.SourceGenerators
                                 return GetParameters(wrapper, target);
                             }
                         }
-                        _ = builder.AppendLine(handler:
-                            $$"""
-                                    /// <inheritdoc cref="{{method.GetConstructedFromDocumentationCommentId()}}"/>
-                                    {{source.GetMemberModify()}}{{returnType.WrapperTypeName}} {{method.Name}}({{string.Join(" ", parameters.Select(x => $"{x.marshal.WrapperTypeName} {x.name}"))}})
-                                    {
-                                        {{(method.ReturnsVoid ? string.Empty : "return ")}}{{returnWithArgs.ConvertToWrapperWithArgs(args => $"{target.GetMemberTarget(method)}.{method.Name}({string.Join(", ", parameters.Select(x => x.marshal.ConvertToManaged(x.name)).Concat(args.Select(x => x.Name)))})", [.. method.Parameters[^arguments.Length..]])}};
-                                    }
-
-                            """);
-                        break;
+                        return SyntaxFactory.MethodDeclaration(
+                            default,
+                            SyntaxFactory.TokenList(source.GetMemberModify()),
+                            SyntaxFactory.IdentifierName(returnType.WrapperTypeName),
+                            default,
+                            SyntaxFactory.Identifier(method.Name),
+                            default,
+                            SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters.Select(x => SyntaxFactory.Parameter(SyntaxFactory.Identifier(x.name)).WithType(SyntaxFactory.IdentifierName(x.marshal.WrapperTypeName))))),
+                            default,
+                            SyntaxFactory.Block(
+                                SyntaxFactory.SingletonList(
+                                    SyntaxFactory.ParseStatement($"{(method.ReturnsVoid ? string.Empty : "return ")}{returnWithArgs.ConvertToWrapperWithArgs(args => $"{target.GetMemberTarget(method)}.{method.Name}({string.Join(", ", parameters.Select(x => x.marshal.ConvertToManaged(x.name)).Concat(args.Select(x => x.Name)))})", [.. method.Parameters[^arguments.Length..]])};"))),
+                            expressionBody: default)
+                            .WithLeadingTrivia(
+                                SyntaxFactory.TriviaList(
+                                    SyntaxFactory.Comment($"/// <inheritdoc cref=\"{method.GetConstructedFromDocumentationCommentId()}\"/>")));
                     }
                     else if (method is { IsStatic: false, Parameters.Length: 0, Name: nameof(IDisposable.Dispose), ReturnType.SpecialType: SpecialType.System_Void } && symbol.AllInterfaces.Any(x => x.Name == nameof(System.IDisposable) && x.ContainingNamespace.ToDisplayString() == nameof(System)))
                     {
-                        _ = builder.AppendLine(handler:
-                            $$"""
-                                    /// <inheritdoc cref="{{method.GetConstructedFromDocumentationCommentId()}}"/>
-                                    {{source.GetMemberModify()}}void {{nameof(IDisposable.Dispose)}}()
-                                    {
-                                        {{target.GetMemberTarget(method)}}.{{nameof(IDisposable.Dispose)}}();
-                                        global::System.GC.SuppressFinalize(this);
-                                    }
-
-                            """);
+                        return SyntaxFactory.MethodDeclaration(
+                            default,
+                            SyntaxFactory.TokenList(source.GetMemberModify()),
+                            SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.VoidKeyword)),
+                            default,
+                            SyntaxFactory.Identifier(nameof(IDisposable.Dispose)),
+                            default,
+                            SyntaxFactory.ParameterList(),
+                            default,
+                            SyntaxFactory.Block(
+                                SyntaxFactory.List<StatementSyntax>([
+                                    SyntaxFactory.ExpressionStatement(
+                                        SyntaxFactory.InvocationExpression(
+                                            SyntaxFactory.MemberAccessExpression(
+                                                SyntaxKind.SimpleMemberAccessExpression,
+                                                SyntaxFactory.IdentifierName(target.GetMemberTarget(method)),
+                                                SyntaxFactory.IdentifierName(nameof(IDisposable.Dispose))))),
+                                    SyntaxFactory.ExpressionStatement(
+                                        SyntaxFactory.InvocationExpression(
+                                            SyntaxFactory.MemberAccessExpression(
+                                                SyntaxKind.SimpleMemberAccessExpression,
+                                                SyntaxFactory.IdentifierName("global::System.GC"),
+                                                SyntaxFactory.IdentifierName(nameof(GC.SuppressFinalize))),
+                                            SyntaxFactory.ArgumentList(SyntaxFactory.SingletonSeparatedList(SyntaxFactory.Argument(SyntaxFactory.ThisExpression())))))])),
+                            expressionBody: default)
+                            .WithLeadingTrivia(
+                                SyntaxFactory.TriviaList(
+                                    SyntaxFactory.Comment($"/// <inheritdoc cref=\"{method.GetConstructedFromDocumentationCommentId()}\"/>")));
                     }
                     else
                     {
@@ -205,19 +308,26 @@ namespace WinRTWrapper.SourceGenerators
                                 return GetParameters(wrapper, target);
                             }
                         }
-                        _ = builder.AppendLine(handler:
-                            $$"""
-                                    /// <inheritdoc cref="{{method.GetConstructedFromDocumentationCommentId()}}"/>
-                                    {{source.GetMemberModify()}}{{returnType.WrapperTypeName}} {{method.Name}}({{string.Join(" ", parameters.Select(x => $"{x.marshal.WrapperTypeName} {x.name}"))}})
-                                    {
-                                        {{(method.ReturnsVoid ? string.Empty : "return ")}}{{returnType.ConvertToWrapper($"{target.GetMemberTarget(method)}.{method.Name}({string.Join(", ", parameters.Select(x => x.marshal.ConvertToManaged(x.name)))})")}};
-                                    }
-
-                            """);
+                        return SyntaxFactory.MethodDeclaration(
+                            default,
+                            SyntaxFactory.TokenList(source.GetMemberModify()),
+                            SyntaxFactory.IdentifierName(returnType.WrapperTypeName),
+                            default,
+                            SyntaxFactory.Identifier(method.Name),
+                            default,
+                            SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters.Select(x => SyntaxFactory.Parameter(SyntaxFactory.Identifier(x.name)).WithType(SyntaxFactory.IdentifierName(x.marshal.WrapperTypeName))))),
+                            default,
+                            SyntaxFactory.Block(
+                                SyntaxFactory.SingletonList<StatementSyntax>(
+                                    SyntaxFactory.ParseStatement($"{(method.ReturnsVoid ? string.Empty : "return ")}{returnType.ConvertToWrapper($"{target.GetMemberTarget(method)}.{method.Name}({string.Join(", ", parameters.Select(x => x.marshal.ConvertToManaged(x.name)))})")};"))),
+                            expressionBody: default)
+                            .WithLeadingTrivia(
+                                SyntaxFactory.TriviaList(
+                                    SyntaxFactory.Comment($"/// <inheritdoc cref=\"{method.GetConstructedFromDocumentationCommentId()}\"/>")));
                     }
-                    break;
+                default:
+                    return null;
             }
-            return builder;
         }
 
         /// <summary>
@@ -226,13 +336,14 @@ namespace WinRTWrapper.SourceGenerators
         /// <param name="source">The property symbol to add.</param>
         /// <param name="builder">The <see cref="StringBuilder"/> to append the property code to.</param>
         /// <returns>The updated <see cref="StringBuilder"/> with the property code added.</returns>
-        private static StringBuilder AddProperty(SymbolWrapper<IPropertySymbol> source, StringBuilder builder, ImmutableArray<MarshalType> marshals)
+        private static MemberDeclarationSyntax? AddProperty(SymbolWrapper<IPropertySymbol> source, ImmutableArray<MarshalType> marshals)
         {
+            StringBuilder builder = new();
             (INamedTypeSymbol symbol, INamedTypeSymbol target, IPropertySymbol? wrapper, IPropertySymbol property) = source;
             switch (property)
             {
                 case { IsWriteOnly: true }:
-                    return builder;
+                    return null;
                 case { IsIndexer: true }:
                     if (property is { IsStatic: false, Parameters.Length: 1 } && symbol.AllInterfaces.Any(x =>
                         x.IsGenericType
@@ -275,7 +386,7 @@ namespace WinRTWrapper.SourceGenerators
                             """);
                         break;
                     }
-                    return builder;
+                    return SyntaxFactory.ParseMemberDeclaration(builder.ToString());
                 default:
                     VarianceKind variance = property switch
                     {
@@ -311,7 +422,7 @@ namespace WinRTWrapper.SourceGenerators
                         """);
                     break;
             }
-            return builder;
+            return SyntaxFactory.ParseMemberDeclaration(builder.ToString());
         }
 
         /// <summary>
@@ -320,8 +431,9 @@ namespace WinRTWrapper.SourceGenerators
         /// <param name="source">The event symbol to add.</param>
         /// <param name="builder">The <see cref="StringBuilder"/> to append the event code to.</param>
         /// <returns>The updated <see cref="StringBuilder"/> with the event code added.</returns>
-        private static object AddEvent(SymbolWrapper<IEventSymbol> source, StringBuilder builder, GenerationOptions options)
+        private static MemberDeclarationSyntax? AddEvent(SymbolWrapper<IEventSymbol> source, GenerationOptions options)
         {
+            StringBuilder builder = new();
             (INamedTypeSymbol symbol, INamedTypeSymbol target, IEventSymbol? wrapper, IEventSymbol @event) = source;
             IMethodSymbol invoke = @event.Type.GetMembers().OfType<IMethodSymbol>().FirstOrDefault(x => x.Name == "Invoke");
             MarshalType marshal = GetWrapperType(Enumerable.Unwrap(wrapper?.GetAttributes(), @event.GetAttributes()), options.Marshals, @event.Type, wrapper?.Type, VarianceKind.None);
@@ -453,7 +565,7 @@ namespace WinRTWrapper.SourceGenerators
                         """);
                     break;
             }
-            return builder;
+            return SyntaxFactory.ParseMemberDeclaration(builder.ToString());
         }
 
         /// <summary>
