@@ -29,10 +29,10 @@ namespace WinRTWrapper.SourceGenerators
             {
                 yield return SyntaxFactory.FieldDeclaration(
                     default,
-                    target is { IsReferenceType: true } or { IsReadOnly: true } ? 
+                    target is { IsReferenceType: true } or { IsReadOnly: true } ?
                         SyntaxFactory.TokenList(
                             SyntaxFactory.Token(SyntaxKind.PrivateKeyword),
-                            SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword)):
+                            SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword)) :
                         SyntaxFactory.TokenList(
                             SyntaxFactory.Token(SyntaxKind.PrivateKeyword)),
                     SyntaxFactory.VariableDeclaration(
@@ -77,7 +77,7 @@ namespace WinRTWrapper.SourceGenerators
                 {
                     if (attribute.ConstructorArguments is [{ Kind: TypedConstantKind.Type, Value: INamedTypeSymbol managedType }, { Kind: TypedConstantKind.Type, Value: INamedTypeSymbol wrapperType }])
                     {
-                        if (!symbol.GetMembers().OfType<IMethodSymbol>().Any(x=>x is {Name : "ConvertToWrapper", Parameters.Length:1 } && x.Parameters[0].Type.Equals(managedType, SymbolEqualityComparer.Default)))
+                        if (!symbol.GetMembers().OfType<IMethodSymbol>().Any(x => x is { Name: "ConvertToWrapper", Parameters.Length: 1 } && x.Parameters[0].Type.Equals(managedType, SymbolEqualityComparer.Default)))
                         {
                             yield return SyntaxFactory.MethodDeclaration(
                                 default,
@@ -331,14 +331,12 @@ namespace WinRTWrapper.SourceGenerators
         }
 
         /// <summary>
-        /// Adds a <paramref name="property"/> to the generated wrapper class.
+        /// Gets the <see cref="BasePropertyDeclarationSyntax?"/> for a given <paramref name="source"/> property symbol.
         /// </summary>
-        /// <param name="source">The property symbol to add.</param>
-        /// <param name="builder">The <see cref="StringBuilder"/> to append the property code to.</param>
-        /// <returns>The updated <see cref="StringBuilder"/> with the property code added.</returns>
-        private static MemberDeclarationSyntax? AddProperty(SymbolWrapper<IPropertySymbol> source, ImmutableArray<MarshalType> marshals)
+        /// <param name="source">The property symbol to process.</param>
+        /// <returns>The <see cref="BasePropertyDeclarationSyntax?"/> representing the property, or null if the property is write-only or an indexer that does not meet the criteria.</returns>
+        private static BasePropertyDeclarationSyntax? AddProperty(SymbolWrapper<IPropertySymbol> source, ImmutableArray<MarshalType> marshals)
         {
-            StringBuilder builder = new();
             (INamedTypeSymbol symbol, INamedTypeSymbol target, IPropertySymbol? wrapper, IPropertySymbol property) = source;
             switch (property)
             {
@@ -359,34 +357,39 @@ namespace WinRTWrapper.SourceGenerators
                     {
                         MarshalType returnType = GetWrapperType(Enumerable.Unwrap(wrapper?.GetAttributes(), property.GetAttributes()), marshals, property.Type, wrapper?.Type, VarianceKind.Out);
                         ImmutableArray<(MarshalType marshal, string name)> parameters = [.. property.Parameters.Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type, null, VarianceKind.In), x.Name))];
-                        _ = builder.AppendLine(handler:
-                            $$"""
-                                    /// <inheritdoc cref="{{property.GetConstructedFromDocumentationCommentId()}}"/>
-                                    {{source.GetMemberModify()}}{{returnType.WrapperTypeName}} this[{{string.Join(" ", parameters.Select(x => $"{x.marshal.WrapperTypeName} {x.name}"))}}]
-                                    {
-                                        get
-                                        {
-                                            return this.target[{{string.Join(", ", parameters.Select(x => x.marshal.ConvertToManaged(x.name)))}}];
-                                        }
-                            """);
+                        SyntaxList<AccessorDeclarationSyntax> list =
+                            SyntaxFactory.SingletonList(
+                                SyntaxFactory.AccessorDeclaration(
+                                    SyntaxKind.GetAccessorDeclaration,
+                                    SyntaxFactory.Block(
+                                        SyntaxFactory.SingletonList<StatementSyntax>(
+                                            SyntaxFactory.ReturnStatement(
+                                                SyntaxFactory.ParseExpression($"{target.GetMemberTarget(property)}[{string.Join(", ", parameters.Select(x => x.marshal.ConvertToManaged(x.name)))})]"))))));
                         if (!property.IsReadOnly)
                         {
-                            _ = builder.AppendLine(handler:
-                                $$"""
-                                            set
-                                            {
-                                                this.target[{{string.Join(", ", parameters.Select(x => x.marshal.ConvertToManaged(x.name)))}}] = {{returnType.ConvertToManaged("value")}};
-                                            }
-                                """);
+                            list = list.Add(
+                                SyntaxFactory.AccessorDeclaration(
+                                    SyntaxKind.SetAccessorDeclaration,
+                                    SyntaxFactory.Block(
+                                        SyntaxFactory.SingletonList<StatementSyntax>(
+                                            SyntaxFactory.ExpressionStatement(
+                                                SyntaxFactory.AssignmentExpression(
+                                                    SyntaxKind.SimpleAssignmentExpression,
+                                                    SyntaxFactory.ParseExpression($"{target.GetMemberTarget(property)}[{string.Join(", ", parameters.Select(x => x.marshal.ConvertToManaged(x.name)))})]"),
+                                                    SyntaxFactory.IdentifierName("value")))))));
                         }
-                        _ = builder.AppendLine(
-                            """
-                                    }
-
-                            """);
-                        break;
+                        return SyntaxFactory.IndexerDeclaration(
+                            default,
+                            SyntaxFactory.TokenList(source.GetMemberModify()),
+                            SyntaxFactory.IdentifierName(returnType.WrapperTypeName),
+                            default,
+                            SyntaxFactory.BracketedParameterList(SyntaxFactory.SeparatedList(parameters.Select(x => SyntaxFactory.Parameter(SyntaxFactory.Identifier(x.name)).WithType(SyntaxFactory.IdentifierName(x.marshal.WrapperTypeName))))),
+                            SyntaxFactory.AccessorList(list))
+                            .WithLeadingTrivia(
+                                SyntaxFactory.TriviaList(
+                                    SyntaxFactory.Comment($"/// <inheritdoc cref=\"{property.GetConstructedFromDocumentationCommentId()}\"/>")));
                     }
-                    return SyntaxFactory.ParseMemberDeclaration(builder.ToString());
+                    return null;
                 default:
                     VarianceKind variance = property switch
                     {
@@ -395,177 +398,316 @@ namespace WinRTWrapper.SourceGenerators
                         _ => VarianceKind.None
                     };
                     MarshalType marshal = GetWrapperType(Enumerable.Unwrap(wrapper?.GetAttributes(), property.GetAttributes()), marshals, property.Type, wrapper?.Type, variance);
-                    _ = builder.AppendLine(handler:
-                        $$"""
-                                /// <inheritdoc cref="{{property.GetConstructedFromDocumentationCommentId()}}"/>
-                                {{source.GetMemberModify()}}{{marshal.WrapperTypeName}} {{property.Name}}
-                                {
-                                    get
-                                    {
-                                        return {{marshal.ConvertToWrapper($"{target.GetMemberTarget(property)}.{property.Name}")}};
-                                    }
-                        """);
+                    SyntaxList<AccessorDeclarationSyntax> _list =
+                        SyntaxFactory.SingletonList(
+                             SyntaxFactory.AccessorDeclaration(
+                                SyntaxKind.GetAccessorDeclaration,
+                                SyntaxFactory.Block(
+                                    SyntaxFactory.SingletonList<StatementSyntax>(
+                                        SyntaxFactory.ReturnStatement(
+                                            SyntaxFactory.ParseExpression($"{marshal.ConvertToWrapper($"{target.GetMemberTarget(property)}.{property.Name}")}"))))));
                     if (!property.IsReadOnly)
                     {
-                        _ = builder.AppendLine(handler:
-                            $$"""
-                                        set
-                                        {
-                                            {{target.GetMemberTarget(property)}}.{{property.Name}} = {{marshal.ConvertToManaged("value")}};
-                                        }
-                            """);
+                        _list = _list.Add(
+                            SyntaxFactory.AccessorDeclaration(
+                                SyntaxKind.SetAccessorDeclaration,
+                                SyntaxFactory.Block(
+                                    SyntaxFactory.SingletonList<StatementSyntax>(
+                                        SyntaxFactory.ExpressionStatement(
+                                            SyntaxFactory.AssignmentExpression(
+                                                SyntaxKind.SimpleAssignmentExpression,
+                                                SyntaxFactory.ParseExpression($"{target.GetMemberTarget(property)}.{property.Name}"),
+                                                SyntaxFactory.ParseExpression(marshal.ConvertToManaged("value"))))))));
                     }
-                    _ = builder.AppendLine(
-                        """
-                                }
-
-                        """);
-                    break;
+                    return SyntaxFactory.PropertyDeclaration(
+                        default,
+                        SyntaxFactory.TokenList(source.GetMemberModify()),
+                        SyntaxFactory.IdentifierName(marshal.WrapperTypeName),
+                        default,
+                        SyntaxFactory.Identifier(property.Name),
+                        SyntaxFactory.AccessorList(_list))
+                        .WithLeadingTrivia(
+                            SyntaxFactory.TriviaList(
+                                SyntaxFactory.Comment($"/// <inheritdoc cref=\"{property.GetConstructedFromDocumentationCommentId()}\"/>")));
             }
-            return SyntaxFactory.ParseMemberDeclaration(builder.ToString());
         }
 
         /// <summary>
-        /// Adds an <paramref name="event"/> to the generated wrapper class.
+        /// Gets the <see cref="MemberDeclarationSyntax"/> for a given <paramref name="source"/> event symbol.
         /// </summary>
-        /// <param name="source">The event symbol to add.</param>
-        /// <param name="builder">The <see cref="StringBuilder"/> to append the event code to.</param>
-        /// <returns>The updated <see cref="StringBuilder"/> with the event code added.</returns>
-        private static MemberDeclarationSyntax? AddEvent(SymbolWrapper<IEventSymbol> source, GenerationOptions options)
+        /// <param name="source">The event symbol to process.</param>
+        /// <returns>The <see cref="MemberDeclarationSyntax"/> representing the event, or an empty enumerable if the event is not applicable.</returns>
+        private static IEnumerable<MemberDeclarationSyntax> AddEvent(SymbolWrapper<IEventSymbol> source, GenerationOptions options)
         {
-            StringBuilder builder = new();
             (INamedTypeSymbol symbol, INamedTypeSymbol target, IEventSymbol? wrapper, IEventSymbol @event) = source;
             IMethodSymbol invoke = @event.Type.GetMembers().OfType<IMethodSymbol>().FirstOrDefault(x => x.Name == "Invoke");
             MarshalType marshal = GetWrapperType(Enumerable.Unwrap(wrapper?.GetAttributes(), @event.GetAttributes()), options.Marshals, @event.Type, wrapper?.Type, VarianceKind.None);
-            switch ((options, marshal))
+            switch (options)
             {
-                case ({ IsWinMDObject: true }, { HasConversion: true }):
-                    _ = builder.AppendLine(handler:
-                        $$"""
-                                /// <summary>
-                                /// The singleton flag for the <see cref="{{symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}.{{@event.Name}}"/> event registration.
-                                /// </summary>
-                                private {{(@event.IsStatic ? "static " : string.Empty)}}bool _is_{{@event.Name}}_EventRegistered = false;
-                                /// <summary>
-                                /// The event registration token table for the <see cref="{{symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}.{{@event.Name}}"/> event.
-                                /// </summary>
-                                private {{(@event.IsStatic ? "static " : string.Empty)}}readonly global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationTokenTable<{{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}> _{{@event.Name}}_EventTable = new global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationTokenTable<{{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}>();
-                                /// <inheritdoc cref="{{@event.GetConstructedFromDocumentationCommentId()}}"/>
-                                {{@event.GetMemberModify()}}event {{marshal.WrapperTypeName}} {{@event.Name}}
-                                {
-                                    add
-                                    {
-                                        if (!_is_{{@event.Name}}_EventRegistered)
-                                        {
-                                            {{target.GetMemberTarget(@event)}}.{{@event.Name}} += delegate ({{string.Join(", ", invoke.Parameters.Select(x => x.ToDisplayString()))}}) 
-                                            {
-                                                {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} @event = _{{@event.Name}}_EventTable.InvocationList;
-                                                if (@event != null)
+                case { IsWinMDObject: true }:
+                    yield return SyntaxFactory.FieldDeclaration(
+                        default,
+                        @event.IsStatic ?
+                            SyntaxFactory.TokenList(
+                                SyntaxFactory.Token(SyntaxKind.PrivateKeyword),
+                                SyntaxFactory.Token(SyntaxKind.StaticKeyword)) :
+                            SyntaxFactory.TokenList(
+                                SyntaxFactory.Token(SyntaxKind.PrivateKeyword)),
+                        SyntaxFactory.VariableDeclaration(
+                            SyntaxFactory.IdentifierName("bool"),
+                            SyntaxFactory.SingletonSeparatedList(
+                                SyntaxFactory.VariableDeclarator(
+                                    SyntaxFactory.Identifier($"_is_{@event.Name}_EventRegistered"),
+                                    default,
+                                    SyntaxFactory.EqualsValueClause(
+                                        SyntaxFactory.LiteralExpression(SyntaxKind.FalseLiteralExpression))))))
+                        .WithLeadingTrivia(
+                            SyntaxFactory.TriviaList(
+                                SyntaxFactory.Comment("/// <summary>"),
+                                SyntaxFactory.Comment($"/// The singleton flag for the <see cref=\"{symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{@event.Name}\"/> event registration."),
+                                SyntaxFactory.Comment("/// </summary>")));
+
+                    yield return SyntaxFactory.FieldDeclaration(
+                        default,
+                        @event.IsStatic ?
+                            SyntaxFactory.TokenList(
+                                SyntaxFactory.Token(SyntaxKind.PrivateKeyword),
+                                SyntaxFactory.Token(SyntaxKind.StaticKeyword),
+                                SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword)) :
+                            SyntaxFactory.TokenList(
+                                SyntaxFactory.Token(SyntaxKind.PrivateKeyword),
+                                SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword)),
+                        SyntaxFactory.VariableDeclaration(
+                            SyntaxFactory.GenericName(
+                                SyntaxFactory.Identifier("global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationTokenTable"),
+                                SyntaxFactory.TypeArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList<TypeSyntax>(
+                                        SyntaxFactory.IdentifierName(@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))))),
+                            SyntaxFactory.SingletonSeparatedList(
+                                SyntaxFactory.VariableDeclarator(
+                                    SyntaxFactory.Identifier($"_{@event.Name}_EventTable"),
+                                    default,
+                                    SyntaxFactory.EqualsValueClause(
+                                        SyntaxFactory.ObjectCreationExpression(
+                                            SyntaxFactory.GenericName(
+                                                SyntaxFactory.Identifier("global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationTokenTable"),
+                                                SyntaxFactory.TypeArgumentList(
+                                                    SyntaxFactory.SingletonSeparatedList<TypeSyntax>(
+                                                        SyntaxFactory.IdentifierName(@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))))),
+                                            SyntaxFactory.ArgumentList(),
+                                            default)))))
+                        .WithLeadingTrivia(
+                            SyntaxFactory.TriviaList(
+                                SyntaxFactory.Comment("/// <summary>"),
+                                SyntaxFactory.Comment($"/// The event registration token table for the <see cref=\"{symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{@event.Name}\"/> event."),
+                                SyntaxFactory.Comment("/// </summary>"))));
+
+                    yield return SyntaxFactory.EventDeclaration(
+                        default,
+                        SyntaxFactory.TokenList(source.GetMemberModify()),
+                        SyntaxFactory.IdentifierName(marshal.WrapperTypeName),
+                        default,
+                        SyntaxFactory.Identifier(@event.Name),
+                        SyntaxFactory.AccessorList(
+                            SyntaxFactory.List([
+                                SyntaxFactory.AccessorDeclaration(
+                                    SyntaxKind.AddAccessorDeclaration,
+                                    SyntaxFactory.Block(
+                                        SyntaxFactory.SingletonList(
+                                            SyntaxFactory.ParseStatement(
+                                                $$"""
+                                                if (!_is_{{@event.Name}}_EventRegistered)
                                                 {
-                                                    {{(invoke.ReturnsVoid ? string.Empty : "return ")}}@event.Invoke({{string.Join(", ", invoke.Parameters.Select(x => x.Name))}});
+                                                    {{target.GetMemberTarget(@event)}}.{{@event.Name}} += delegate ({{string.Join(", ", invoke.Parameters.Select(x => x.ToDisplayString()))}}) 
+                                                    {
+                                                        {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} @event = _{{@event.Name}}_EventTable.InvocationList;
+                                                        if (@event != null)
+                                                        {
+                                                            {{(invoke.ReturnsVoid ? string.Empty : "return ")}}@event.Invoke({{string.Join(", ", invoke.Parameters.Select(x => x.Name))}});
+                                                        }
+                                                        return{{(invoke.ReturnsVoid ? string.Empty : $" default({invoke.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)})")}};
+                                                    };
+                                                    _is_{{@event.Name}}_EventRegistered = true;
                                                 }
-                                                return{{(invoke.ReturnsVoid ? string.Empty : $" default({invoke.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)})")}};
-                                            };
-                                            _is_{{@event.Name}}_EventRegistered = true;
-                                        }
-                                        return _{{@event.Name}}_EventTable.AddEventHandler({{marshal.ConvertToManaged("value")}});
-                                    }
-                                    remove
-                                    {
-                                        _{{@event.Name}}_EventTable.RemoveEventHandler(value);
-                                    }
-                                }
-
-                        """);
+                                                return _{{@event.Name}}_EventTable.AddEventHandler({{marshal.ConvertToManaged("value")}});
+                                                """)))),
+                                SyntaxFactory.AccessorDeclaration(
+                                    SyntaxKind.RemoveAccessorDeclaration,
+                                    SyntaxFactory.Block(
+                                        SyntaxFactory.SingletonList(
+                                            SyntaxFactory.ExpressionStatement(
+                                                SyntaxFactory.InvocationExpression(
+                                                    SyntaxFactory.MemberAccessExpression(
+                                                        SyntaxKind.SimpleMemberAccessExpression,
+                                                        SyntaxFactory.IdentifierName($"_{@event.Name}_EventTable"),
+                                                        SyntaxFactory.IdentifierName("RemoveEventHandler")),
+                                                    SyntaxFactory.ArgumentList(
+                                                        SyntaxFactory.SingletonSeparatedList(
+                                                            SyntaxFactory.Argument(
+                                                                SyntaxFactory.IdentifierName("value")))))))))])))
+                        .WithLeadingTrivia(
+                            SyntaxFactory.TriviaList(
+                                SyntaxFactory.Comment($"/// <inheritdoc cref=\"{@event.GetConstructedFromDocumentationCommentId()}\"/>")));
                     break;
-                case ({ IsWinMDObject: false }, { HasConversion: true }):
-                    _ = builder.AppendLine(handler:
-                        $$"""
-                                /// <summary>
-                                /// The event weak table for the <see cref="{{symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}.{{@event.Name}}"/> event.
-                                /// </summary>
-                                private {{(@event.IsStatic ? "static " : string.Empty)}}readonly global::System.Runtime.CompilerServices.ConditionalWeakTable<{{marshal.WrapperTypeName}}, {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}> _{{@event.Name}}_EventWeakTable = new global::System.Runtime.CompilerServices.ConditionalWeakTable<{{marshal.WrapperTypeName}}, {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}>();
-                                /// <inheritdoc cref="{{@event.GetConstructedFromDocumentationCommentId()}}"/>
-                                {{@event.GetMemberModify()}}event {{marshal.WrapperTypeName}} {{@event.Name}}
-                                {
-                                    add
-                                    {
-                                        {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} handle = {{marshal.ConvertToManaged("value")}};
-                                        {{target.GetMemberTarget(@event)}}.{{@event.Name}} += handle;
-                                        _{{@event.Name}}_EventWeakTable.Add(value, handle);
-                                    }
-                                    remove
-                                    {
-                                        {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} handle;
-                                        if (_{{@event.Name}}_EventWeakTable.TryGetValue(value, out handle))
-                                        {
-                                            {{target.GetMemberTarget(@event)}}.{{@event.Name}} -= handle;
-                                            _{{@event.Name}}_EventWeakTable.Remove(value);
-                                        }
-                                    }
-                                }
+                default:
+                    switch (marshal)
+                    {
+                        case { HasConversion: true }:
+                            yield return SyntaxFactory.FieldDeclaration(
+                                default,
+                                @event.IsStatic ?
+                                    SyntaxFactory.TokenList(
+                                        SyntaxFactory.Token(SyntaxKind.PrivateKeyword),
+                                        SyntaxFactory.Token(SyntaxKind.StaticKeyword),
+                                        SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword)) :
+                                    SyntaxFactory.TokenList(
+                                        SyntaxFactory.Token(SyntaxKind.PrivateKeyword),
+                                        SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword)),
+                                SyntaxFactory.VariableDeclaration(
+                                    SyntaxFactory.GenericName(
+                                        SyntaxFactory.Identifier("global::System.Runtime.CompilerServices.ConditionalWeakTable"),
+                                        SyntaxFactory.TypeArgumentList(
+                                            SyntaxFactory.SeparatedList<TypeSyntax>([
+                                                SyntaxFactory.IdentifierName(marshal.WrapperTypeName),
+                                        SyntaxFactory.IdentifierName(@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))]))),
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.VariableDeclarator(
+                                            SyntaxFactory.Identifier($"_{@event.Name}_EventWeakTable"),
+                                            default,
+                                            SyntaxFactory.EqualsValueClause(
+                                                SyntaxFactory.ObjectCreationExpression(
+                                                    SyntaxFactory.GenericName(
+                                                        SyntaxFactory.Identifier("global::System.Runtime.CompilerServices.ConditionalWeakTable"),
+                                                        SyntaxFactory.TypeArgumentList(
+                                                            SyntaxFactory.SeparatedList<TypeSyntax>([
+                                                                SyntaxFactory.IdentifierName(marshal.WrapperTypeName),
+                                                        SyntaxFactory.IdentifierName(@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))]))),
+                                                    SyntaxFactory.ArgumentList(),
+                                                    default)))))
+                                .WithLeadingTrivia(
+                                    SyntaxFactory.TriviaList(
+                                        SyntaxFactory.Comment("/// <summary>"),
+                                        SyntaxFactory.Comment($"/// The event weak table for the <see cref=\"{symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{@event.Name}\"/> event."),
+                                        SyntaxFactory.Comment("/// </summary>"))));
 
-                        """);
-                    break;
-                case ({ IsWinMDObject: true }, { HasConversion: false }):
-                    _ = builder.AppendLine(handler:
-                        $$"""
-                                /// <summary>
-                                /// The singleton flag for the <see cref="{{symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}.{{@event.Name}}"/> event registration.
-                                /// </summary>
-                                private {{(@event.IsStatic ? "static " : string.Empty)}}bool _is_{{@event.Name}}_EventRegistered = false;
-                                /// <summary>
-                                /// The event registration token table for the <see cref="{{symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}.{{@event.Name}}"/> event.
-                                /// </summary>
-                                private {{(@event.IsStatic ? "static " : string.Empty)}}readonly global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationTokenTable<{{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}> _{{@event.Name}}_EventTable = new global::System.Runtime.InteropServices.WindowsRuntime.EventRegistrationTokenTable<{{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}}>();
-                                /// <inheritdoc cref="{{@event.GetConstructedFromDocumentationCommentId()}}"/>
-                                {{@event.GetMemberModify()}}event {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} {{@event.Name}}
-                                {
-                                    add
-                                    {
-                                        if (!_is_{{@event.Name}}_EventRegistered)
-                                        {
-                                            {{target.GetMemberTarget(@event)}}.{{@event.Name}} += delegate ({{string.Join(", ", invoke.Parameters.Select(x => x.ToDisplayString()))}}) 
-                                            {
-                                                {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} @event = _{{@event.Name}}_EventTable.InvocationList;
-                                                if (@event != null)
-                                                {
-                                                    {{(invoke.ReturnsVoid ? string.Empty : "return ")}}@event.Invoke({{string.Join(", ", invoke.Parameters.Select(x => x.Name))}});
-                                                }
-                                                return{{(invoke.ReturnsVoid ? string.Empty : $" default({invoke.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)})")}};
-                                            };
-                                            _is_{{@event.Name}}_EventRegistered = true;
-                                        }
-                                        return _{{@event.Name}}_EventTable.AddEventHandler(value);
-                                    }
-                                    remove
-                                    {
-                                        _{{@event.Name}}_EventTable.RemoveEventHandler(value);
-                                    }
-                                }
-
-                        """);
-                    break;
-                case ({ IsWinMDObject: false }, { HasConversion: false }):
-                    _ = builder.AppendLine(handler:
-                        $$"""
-                                /// <inheritdoc cref="{{@event.GetConstructedFromDocumentationCommentId()}}"/>
-                                {{@event.GetMemberModify()}}event {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} {{@event.Name}}
-                                {
-                                    add
-                                    {
-                                        {{target.GetMemberTarget(@event)}}.{{@event.Name}} += value;
-                                    }
-                                    remove
-                                    {
-                                        {{target.GetMemberTarget(@event)}}.{{@event.Name}} -= value;
-                                    }
-                                }
-
-                        """);
+                            yield return SyntaxFactory.EventDeclaration(
+                                default,
+                                SyntaxFactory.TokenList(source.GetMemberModify()),
+                                SyntaxFactory.IdentifierName(marshal.WrapperTypeName),
+                                default,
+                                SyntaxFactory.Identifier(@event.Name),
+                                SyntaxFactory.AccessorList(
+                                    SyntaxFactory.List([
+                                        SyntaxFactory.AccessorDeclaration(
+                                    SyntaxKind.AddAccessorDeclaration,
+                                    SyntaxFactory.Block(
+                                        SyntaxFactory.List<StatementSyntax>([
+                                            SyntaxFactory.LocalDeclarationStatement(
+                                                SyntaxFactory.VariableDeclaration(
+                                                    SyntaxFactory.IdentifierName(@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                                    SyntaxFactory.SingletonSeparatedList(
+                                                        SyntaxFactory.VariableDeclarator(
+                                                            SyntaxFactory.Identifier("handle"),
+                                                            default,
+                                                            SyntaxFactory.EqualsValueClause(
+                                                                SyntaxFactory.ParseExpression($"{marshal.ConvertToManaged("value")}")))))),
+                                            SyntaxFactory.ExpressionStatement(
+                                                SyntaxFactory.AssignmentExpression(
+                                                    SyntaxKind.AddAssignmentExpression,
+                                                    SyntaxFactory.MemberAccessExpression(
+                                                        SyntaxKind.SimpleMemberAccessExpression,
+                                                        SyntaxFactory.IdentifierName(target.GetMemberTarget(@event)),
+                                                        SyntaxFactory.IdentifierName(@event.Name)),
+                                                    SyntaxFactory.IdentifierName("handle"))),
+                                            SyntaxFactory.ExpressionStatement(
+                                                SyntaxFactory.InvocationExpression(
+                                                    SyntaxFactory.MemberAccessExpression(
+                                                        SyntaxKind.SimpleMemberAccessExpression,
+                                                        SyntaxFactory.IdentifierName($"_{@event.Name}_EventWeakTable"),
+                                                        SyntaxFactory.IdentifierName("Add")),
+                                                    SyntaxFactory.ArgumentList(
+                                                        SyntaxFactory.SeparatedList([
+                                                            SyntaxFactory.Argument(SyntaxFactory.IdentifierName("value")),
+                                                            SyntaxFactory.Argument(SyntaxFactory.IdentifierName("handle"))]))))]))),
+                                SyntaxFactory.AccessorDeclaration(
+                                    SyntaxKind.RemoveAccessorDeclaration,
+                                    SyntaxFactory.Block(
+                                        SyntaxFactory.List<StatementSyntax>([
+                                            SyntaxFactory.LocalDeclarationStatement(
+                                                SyntaxFactory.VariableDeclaration(
+                                                    SyntaxFactory.IdentifierName(@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                                    SyntaxFactory.SingletonSeparatedList(
+                                                        SyntaxFactory.VariableDeclarator(SyntaxFactory.Identifier("handle"))))),
+                                            SyntaxFactory.IfStatement(
+                                                SyntaxFactory.InvocationExpression(
+                                                    SyntaxFactory.MemberAccessExpression(
+                                                        SyntaxKind.SimpleMemberAccessExpression,
+                                                        SyntaxFactory.IdentifierName($"_{@event.Name}_EventWeakTable"),
+                                                        SyntaxFactory.IdentifierName("TryGetValue")),
+                                                    SyntaxFactory.ArgumentList(
+                                                        SyntaxFactory.SeparatedList([
+                                                            SyntaxFactory.Argument(SyntaxFactory.IdentifierName("value")),
+                                                            SyntaxFactory.Argument(
+                                                                default,
+                                                                SyntaxFactory.Token(SyntaxKind.OutKeyword),
+                                                                SyntaxFactory.IdentifierName("handle"))]))),
+                                                SyntaxFactory.Block(
+                                                    SyntaxFactory.List([
+                                                        SyntaxFactory.ExpressionStatement(
+                                                            SyntaxFactory.AssignmentExpression(
+                                                                SyntaxKind.SubtractAssignmentExpression,
+                                                                SyntaxFactory.MemberAccessExpression(
+                                                                    SyntaxKind.SimpleMemberAccessExpression,
+                                                                    SyntaxFactory.IdentifierName(target.GetMemberTarget(@event)),
+                                                                    SyntaxFactory.IdentifierName(@event.Name)),
+                                                                SyntaxFactory.IdentifierName("handle"))),
+                                                        SyntaxFactory.ExpressionStatement(
+                                                            SyntaxFactory.InvocationExpression(
+                                                                SyntaxFactory.MemberAccessExpression(
+                                                                    SyntaxKind.SimpleMemberAccessExpression,
+                                                                    SyntaxFactory.IdentifierName($"_{@event.Name}_EventWeakTable"),
+                                                                    SyntaxFactory.IdentifierName("Remove")),
+                                                                SyntaxFactory.ArgumentList(
+                                                                    SyntaxFactory.SingletonSeparatedList(
+                                                                        SyntaxFactory.Argument(SyntaxFactory.IdentifierName("value"))))))])))])))])))
+                                .WithLeadingTrivia(
+                                    SyntaxFactory.TriviaList(
+                                        SyntaxFactory.Comment($"/// <inheritdoc cref=\"{@event.GetConstructedFromDocumentationCommentId()}\"/>")));
+                            break;
+                        default:
+                            yield return SyntaxFactory.EventDeclaration(
+                                default,
+                                SyntaxFactory.TokenList(source.GetMemberModify()),
+                                SyntaxFactory.IdentifierName(@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                default,
+                                SyntaxFactory.Identifier(@event.Name),
+                                SyntaxFactory.AccessorList(
+                                    SyntaxFactory.List([
+                                        SyntaxFactory.AccessorDeclaration(
+                                    SyntaxKind.AddAccessorDeclaration,
+                                    SyntaxFactory.Block(
+                                        SyntaxFactory.SingletonList<StatementSyntax>(
+                                            SyntaxFactory.ExpressionStatement(
+                                                SyntaxFactory.AssignmentExpression(
+                                                    SyntaxKind.AddAssignmentExpression,
+                                                    SyntaxFactory.ParseExpression($"{target.GetMemberTarget(@event)}.{@event.Name}"),
+                                                    SyntaxFactory.IdentifierName("value")))))),
+                                SyntaxFactory.AccessorDeclaration(
+                                    SyntaxKind.RemoveAccessorDeclaration,
+                                    SyntaxFactory.Block(
+                                        SyntaxFactory.SingletonList<StatementSyntax>(
+                                            SyntaxFactory.ExpressionStatement(
+                                                SyntaxFactory.AssignmentExpression(
+                                                    SyntaxKind.SubtractAssignmentExpression,
+                                                    SyntaxFactory.ParseExpression($"{target.GetMemberTarget(@event)}.{@event.Name}"),
+                                                    SyntaxFactory.IdentifierName("value"))))))])))
+                                .WithLeadingTrivia(
+                                    SyntaxFactory.TriviaList(
+                                        SyntaxFactory.Comment($"/// <inheritdoc cref=\"{@event.GetConstructedFromDocumentationCommentId()}\"/>")));
+                            break;
+                    }
                     break;
             }
-            return SyntaxFactory.ParseMemberDeclaration(builder.ToString());
         }
 
         /// <summary>

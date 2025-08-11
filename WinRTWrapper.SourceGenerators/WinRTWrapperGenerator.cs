@@ -114,22 +114,19 @@ namespace WinRTWrapper.SourceGenerators
                 switch (member)
                 {
                     case SymbolWrapper<IMethodSymbol> method:
-                        if (AddMethod(method, options.Marshals, ref needConstructor) is MemberDeclarationSyntax methodDeclaration)
+                        if (AddMethod(method, options.Marshals, ref needConstructor) is BaseMethodDeclarationSyntax methodDeclaration)
                         {
                             members.Add(methodDeclaration);
                         }
                         break;
                     case SymbolWrapper<IPropertySymbol> property:
-                        if (AddProperty(property, options.Marshals) is MemberDeclarationSyntax propertyDeclaration)
+                        if (AddProperty(property, options.Marshals) is BasePropertyDeclarationSyntax propertyDeclaration)
                         {
                             members.Add(propertyDeclaration);
                         }
                         break;
                     case SymbolWrapper<IEventSymbol> @event:
-                        if (AddEvent(@event, options) is MemberDeclarationSyntax eventDeclaration)
-                        {
-                            members.Add(eventDeclaration);
-                        }
+                        members.AddRange(AddEvent(@event, options));
                         break;
                 }
             }
