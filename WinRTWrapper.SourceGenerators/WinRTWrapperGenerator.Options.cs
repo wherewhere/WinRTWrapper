@@ -24,11 +24,11 @@ namespace WinRTWrapper.SourceGenerators
             bool isWinMDObject = options.GetStringMSBuildProperty(MSBuildProperties.OutputType).Equals("winmdobj", StringComparison.OrdinalIgnoreCase);
             bool isWinRTComponent = options.GetBoolMSBuildProperty(MSBuildProperties.CsWinRTComponent);
             bool isCSWinRT = compilation.ReferencedAssemblyNames.Any(x => x.Name.Equals("WinRT.Runtime", StringComparison.OrdinalIgnoreCase));
-            IEnumerable<MarshalType> marshals = CreateMarshallers(compilation);
+            IEnumerable<IMarshalType> marshals = CreateMarshallers(compilation);
             return new GenerationOptions(isWinMDObject, isWinRTComponent, isCSWinRT, [.. marshals]);
         }
 
-        private static IEnumerable<MarshalType> CreateMarshallers(Compilation compilation)
+        private static IEnumerable<IMarshalType> CreateMarshallers(Compilation compilation)
         {
             if (compilation.GetAccessibleTypeWithMetadataName("System.Threading.Tasks.Task`1", out INamedTypeSymbol? taskOfT))
             {

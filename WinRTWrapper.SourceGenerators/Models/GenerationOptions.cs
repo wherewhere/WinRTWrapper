@@ -9,5 +9,5 @@ namespace WinRTWrapper.SourceGenerators.Models
     /// <param name="IsWinRTComponent">Whether the output type is a WinRT component.</param>
     /// <param name="IsCSWinRT">Whether the project is using CSWinRT.</param>
     /// <param name="Marshals">The collection of marshaling types used in the generation.</param>
-    internal sealed record GenerationOptions(bool IsWinMDObject, bool IsWinRTComponent, bool IsCSWinRT, ImmutableArray<MarshalType> Marshals);
+    internal sealed record GenerationOptions(bool IsWinMDObject, bool IsWinRTComponent, bool IsCSWinRT, ImmutableArray<IMarshalType> Marshals);
 }

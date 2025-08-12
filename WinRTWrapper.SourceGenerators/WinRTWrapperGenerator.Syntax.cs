@@ -159,7 +159,7 @@ namespace WinRTWrapper.SourceGenerators
         /// </summary>
         /// <param name="source">The method symbol to process.</param>
         /// <returns>The <see cref="BaseMethodDeclarationSyntax?"/> representing the method.</returns>
-        private static BaseMethodDeclarationSyntax? AddMethod(SymbolWrapper<IMethodSymbol> source, ImmutableArray<MarshalType> marshals, ref bool? needConstructor)
+        private static BaseMethodDeclarationSyntax? AddMethod(SymbolWrapper<IMethodSymbol> source, ImmutableArray<IMarshalType> marshals, ref bool? needConstructor)
         {
             (INamedTypeSymbol symbol, INamedTypeSymbol target, IMethodSymbol? wrapper, IMethodSymbol method) = source;
             switch (method)
@@ -194,7 +194,7 @@ namespace WinRTWrapper.SourceGenerators
                             SyntaxFactory.TriviaList(
                                 SyntaxFactory.Comment($"/// <inheritdoc cref=\"{method.GetConstructedFromDocumentationCommentId()}\"/>")));
                 case { MethodKind: MethodKind.Ordinary }:
-                    MarshalType returnType = GetWrapperType(Enumerable.Unwrap(wrapper?.GetReturnTypeAttributes(), method.GetReturnTypeAttributes()), marshals, method.ReturnType, wrapper?.ReturnType, VarianceKind.Out);
+                    IMarshalType returnType = GetWrapperType(Enumerable.Unwrap(wrapper?.GetReturnTypeAttributes(), method.GetReturnTypeAttributes()), marshals, method.ReturnType, wrapper?.ReturnType, VarianceKind.Out);
                     static bool CheckArgs(ImmutableArray<ITypeSymbol> arguments, ImmutableArray<IParameterSymbol> parameters)
                     {
                         if (parameters.Length >= arguments.Length)
@@ -212,10 +212,10 @@ namespace WinRTWrapper.SourceGenerators
                         }
                         return false;
                     }
-                    if (returnType is MarshalTypeWithArgs { Arguments: { Length: > 0 } arguments } returnWithArgs && CheckArgs(arguments, method.Parameters))
+                    if (returnType is IMarshalTypeWithArgs { Arguments: { Length: > 0 } arguments } returnWithArgs && CheckArgs(arguments, method.Parameters))
                     {
-                        IEnumerable<(MarshalType marshal, string name)> parameters = GetParameters(source);
-                        IEnumerable<(MarshalType marshal, string name)> GetParameters(SymbolWrapper<IMethodSymbol> source)
+                        IEnumerable<(IMarshalType marshal, string name)> parameters = GetParameters(source);
+                        IEnumerable<(IMarshalType marshal, string name)> GetParameters(SymbolWrapper<IMethodSymbol> source)
                         {
                             (IMethodSymbol? wrapper, IMethodSymbol target) = source;
                             if (wrapper == null)
@@ -224,7 +224,7 @@ namespace WinRTWrapper.SourceGenerators
                             }
                             else
                             {
-                                IEnumerable<(MarshalType marshal, string name)> GetParameters(IMethodSymbol wrapper, IMethodSymbol target)
+                                IEnumerable<(IMarshalType marshal, string name)> GetParameters(IMethodSymbol wrapper, IMethodSymbol target)
                                 {
                                     for (int i = 0; i < wrapper.Parameters.Length; i++)
                                     {
@@ -236,6 +236,19 @@ namespace WinRTWrapper.SourceGenerators
                                 return GetParameters(wrapper, target);
                             }
                         }
+                        ExpressionSyntax result = returnWithArgs.ConvertToWrapperWithArgs(
+                            args => SyntaxFactory.InvocationExpression(
+                                SyntaxFactory.MemberAccessExpression(
+                                    SyntaxKind.SimpleMemberAccessExpression,
+                                    SyntaxFactory.IdentifierName(target.GetMemberTarget(method)),
+                                    SyntaxFactory.IdentifierName(method.Name)),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SeparatedList(
+                                        parameters.Select(x =>
+                                            SyntaxFactory.Argument(
+                                                x.marshal.ConvertToManaged(SyntaxFactory.IdentifierName(x.name))))
+                                            .Concat(args.Select(x => SyntaxFactory.Argument(SyntaxFactory.IdentifierName(x.Name))))))),
+                            [.. method.Parameters[^arguments.Length..]]);
                         return SyntaxFactory.MethodDeclaration(
                             default,
                             SyntaxFactory.TokenList(source.GetMemberModify()),
@@ -246,8 +259,10 @@ namespace WinRTWrapper.SourceGenerators
                             SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters.Select(x => SyntaxFactory.Parameter(SyntaxFactory.Identifier(x.name)).WithType(SyntaxFactory.IdentifierName(x.marshal.WrapperTypeName))))),
                             default,
                             SyntaxFactory.Block(
-                                SyntaxFactory.SingletonList(
-                                    SyntaxFactory.ParseStatement($"{(method.ReturnsVoid ? string.Empty : "return ")}{returnWithArgs.ConvertToWrapperWithArgs(args => $"{target.GetMemberTarget(method)}.{method.Name}({string.Join(", ", parameters.Select(x => x.marshal.ConvertToManaged(x.name)).Concat(args.Select(x => x.Name)))})", [.. method.Parameters[^arguments.Length..]])};"))),
+                                SyntaxFactory.SingletonList<StatementSyntax>(
+                                    method.ReturnsVoid ?
+                                        SyntaxFactory.ExpressionStatement(result) :
+                                        SyntaxFactory.ReturnStatement(result))),
                             expressionBody: default)
                             .WithLeadingTrivia(
                                 SyntaxFactory.TriviaList(
@@ -265,20 +280,19 @@ namespace WinRTWrapper.SourceGenerators
                             SyntaxFactory.ParameterList(),
                             default,
                             SyntaxFactory.Block(
-                                SyntaxFactory.List<StatementSyntax>([
-                                    SyntaxFactory.ExpressionStatement(
-                                        SyntaxFactory.InvocationExpression(
-                                            SyntaxFactory.MemberAccessExpression(
-                                                SyntaxKind.SimpleMemberAccessExpression,
-                                                SyntaxFactory.IdentifierName(target.GetMemberTarget(method)),
-                                                SyntaxFactory.IdentifierName(nameof(IDisposable.Dispose))))),
-                                    SyntaxFactory.ExpressionStatement(
-                                        SyntaxFactory.InvocationExpression(
-                                            SyntaxFactory.MemberAccessExpression(
-                                                SyntaxKind.SimpleMemberAccessExpression,
-                                                SyntaxFactory.IdentifierName("global::System.GC"),
-                                                SyntaxFactory.IdentifierName(nameof(GC.SuppressFinalize))),
-                                            SyntaxFactory.ArgumentList(SyntaxFactory.SingletonSeparatedList(SyntaxFactory.Argument(SyntaxFactory.ThisExpression())))))])),
+                                SyntaxFactory.ExpressionStatement(
+                                    SyntaxFactory.InvocationExpression(
+                                        SyntaxFactory.MemberAccessExpression(
+                                            SyntaxKind.SimpleMemberAccessExpression,
+                                            SyntaxFactory.IdentifierName(target.GetMemberTarget(method)),
+                                            SyntaxFactory.IdentifierName(nameof(IDisposable.Dispose))))),
+                                SyntaxFactory.ExpressionStatement(
+                                    SyntaxFactory.InvocationExpression(
+                                        SyntaxFactory.MemberAccessExpression(
+                                            SyntaxKind.SimpleMemberAccessExpression,
+                                            SyntaxFactory.IdentifierName("global::System.GC"),
+                                            SyntaxFactory.IdentifierName(nameof(GC.SuppressFinalize))),
+                                        SyntaxFactory.ArgumentList(SyntaxFactory.SingletonSeparatedList(SyntaxFactory.Argument(SyntaxFactory.ThisExpression())))))),
                             expressionBody: default)
                             .WithLeadingTrivia(
                                 SyntaxFactory.TriviaList(
@@ -286,8 +300,8 @@ namespace WinRTWrapper.SourceGenerators
                     }
                     else
                     {
-                        IEnumerable<(MarshalType marshal, string name)> parameters = GetParameters(source);
-                        IEnumerable<(MarshalType marshal, string name)> GetParameters(SymbolWrapper<IMethodSymbol> source)
+                        IEnumerable<(IMarshalType marshal, string name)> parameters = GetParameters(source);
+                        IEnumerable<(IMarshalType marshal, string name)> GetParameters(SymbolWrapper<IMethodSymbol> source)
                         {
                             (IMethodSymbol? wrapper, IMethodSymbol target) = source;
                             if (wrapper == null)
@@ -296,7 +310,7 @@ namespace WinRTWrapper.SourceGenerators
                             }
                             else
                             {
-                                IEnumerable<(MarshalType marshal, string name)> GetParameters(IMethodSymbol wrapper, IMethodSymbol target)
+                                IEnumerable<(IMarshalType marshal, string name)> GetParameters(IMethodSymbol wrapper, IMethodSymbol target)
                                 {
                                     for (int i = 0; i < wrapper.Parameters.Length; i++)
                                     {
@@ -308,6 +322,17 @@ namespace WinRTWrapper.SourceGenerators
                                 return GetParameters(wrapper, target);
                             }
                         }
+                        ExpressionSyntax result = returnType.ConvertToWrapper(
+                            SyntaxFactory.InvocationExpression(
+                                SyntaxFactory.MemberAccessExpression(
+                                    SyntaxKind.SimpleMemberAccessExpression,
+                                    SyntaxFactory.IdentifierName(target.GetMemberTarget(method)),
+                                    SyntaxFactory.IdentifierName(method.Name)),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SeparatedList(
+                                        parameters.Select(x =>
+                                            SyntaxFactory.Argument(
+                                                x.marshal.ConvertToManaged(SyntaxFactory.IdentifierName(x.name))))))));
                         return SyntaxFactory.MethodDeclaration(
                             default,
                             SyntaxFactory.TokenList(source.GetMemberModify()),
@@ -319,7 +344,9 @@ namespace WinRTWrapper.SourceGenerators
                             default,
                             SyntaxFactory.Block(
                                 SyntaxFactory.SingletonList<StatementSyntax>(
-                                    SyntaxFactory.ParseStatement($"{(method.ReturnsVoid ? string.Empty : "return ")}{returnType.ConvertToWrapper($"{target.GetMemberTarget(method)}.{method.Name}({string.Join(", ", parameters.Select(x => x.marshal.ConvertToManaged(x.name)))})")};"))),
+                                    method.ReturnsVoid ?
+                                        SyntaxFactory.ExpressionStatement(result) :
+                                        SyntaxFactory.ReturnStatement(result))),
                             expressionBody: default)
                             .WithLeadingTrivia(
                                 SyntaxFactory.TriviaList(
@@ -335,7 +362,7 @@ namespace WinRTWrapper.SourceGenerators
         /// </summary>
         /// <param name="source">The property symbol to process.</param>
         /// <returns>The <see cref="BasePropertyDeclarationSyntax?"/> representing the property, or null if the property is write-only or an indexer that does not meet the criteria.</returns>
-        private static BasePropertyDeclarationSyntax? AddProperty(SymbolWrapper<IPropertySymbol> source, ImmutableArray<MarshalType> marshals)
+        private static BasePropertyDeclarationSyntax? AddProperty(SymbolWrapper<IPropertySymbol> source, ImmutableArray<IMarshalType> marshals)
         {
             (INamedTypeSymbol symbol, INamedTypeSymbol target, IPropertySymbol? wrapper, IPropertySymbol property) = source;
             switch (property)
@@ -355,8 +382,8 @@ namespace WinRTWrapper.SourceGenerators
                             && x.TypeArguments[0].Equals(property.Parameters[0].Type, SymbolEqualityComparer.Default)
                             && x.TypeArguments[1].Equals(property.Type, SymbolEqualityComparer.Default)))))
                     {
-                        MarshalType returnType = GetWrapperType(Enumerable.Unwrap(wrapper?.GetAttributes(), property.GetAttributes()), marshals, property.Type, wrapper?.Type, VarianceKind.Out);
-                        ImmutableArray<(MarshalType marshal, string name)> parameters = [.. property.Parameters.Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type, null, VarianceKind.In), x.Name))];
+                        IMarshalType returnType = GetWrapperType(Enumerable.Unwrap(wrapper?.GetAttributes(), property.GetAttributes()), marshals, property.Type, wrapper?.Type, VarianceKind.Out);
+                        ImmutableArray<(IMarshalType marshal, string name)> parameters = [.. property.Parameters.Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type, null, VarianceKind.In), x.Name))];
                         SyntaxList<AccessorDeclarationSyntax> list =
                             SyntaxFactory.SingletonList(
                                 SyntaxFactory.AccessorDeclaration(
@@ -364,7 +391,13 @@ namespace WinRTWrapper.SourceGenerators
                                     SyntaxFactory.Block(
                                         SyntaxFactory.SingletonList<StatementSyntax>(
                                             SyntaxFactory.ReturnStatement(
-                                                SyntaxFactory.ParseExpression($"{target.GetMemberTarget(property)}[{string.Join(", ", parameters.Select(x => x.marshal.ConvertToManaged(x.name)))})]"))))));
+                                                SyntaxFactory.ElementAccessExpression(
+                                                    SyntaxFactory.IdentifierName(target.GetMemberTarget(property)),
+                                                    SyntaxFactory.BracketedArgumentList(
+                                                        SyntaxFactory.SeparatedList(
+                                                            parameters.Select(x =>
+                                                                SyntaxFactory.Argument(
+                                                                    x.marshal.ConvertToManaged(SyntaxFactory.IdentifierName(x.name))))))))))));
                         if (!property.IsReadOnly)
                         {
                             list = list.Add(
@@ -375,7 +408,13 @@ namespace WinRTWrapper.SourceGenerators
                                             SyntaxFactory.ExpressionStatement(
                                                 SyntaxFactory.AssignmentExpression(
                                                     SyntaxKind.SimpleAssignmentExpression,
-                                                    SyntaxFactory.ParseExpression($"{target.GetMemberTarget(property)}[{string.Join(", ", parameters.Select(x => x.marshal.ConvertToManaged(x.name)))})]"),
+                                                    SyntaxFactory.ElementAccessExpression(
+                                                        SyntaxFactory.IdentifierName(target.GetMemberTarget(property)),
+                                                        SyntaxFactory.BracketedArgumentList(
+                                                            SyntaxFactory.SeparatedList(
+                                                                parameters.Select(x =>
+                                                                    SyntaxFactory.Argument(
+                                                                        x.marshal.ConvertToManaged(SyntaxFactory.IdentifierName(x.name))))))),
                                                     SyntaxFactory.IdentifierName("value")))))));
                         }
                         return SyntaxFactory.IndexerDeclaration(
@@ -397,7 +436,7 @@ namespace WinRTWrapper.SourceGenerators
                         { IsWriteOnly: true } => VarianceKind.In,
                         _ => VarianceKind.None
                     };
-                    MarshalType marshal = GetWrapperType(Enumerable.Unwrap(wrapper?.GetAttributes(), property.GetAttributes()), marshals, property.Type, wrapper?.Type, variance);
+                    IMarshalType marshal = GetWrapperType(Enumerable.Unwrap(wrapper?.GetAttributes(), property.GetAttributes()), marshals, property.Type, wrapper?.Type, variance);
                     SyntaxList<AccessorDeclarationSyntax> _list =
                         SyntaxFactory.SingletonList(
                              SyntaxFactory.AccessorDeclaration(
@@ -405,7 +444,11 @@ namespace WinRTWrapper.SourceGenerators
                                 SyntaxFactory.Block(
                                     SyntaxFactory.SingletonList<StatementSyntax>(
                                         SyntaxFactory.ReturnStatement(
-                                            SyntaxFactory.ParseExpression($"{marshal.ConvertToWrapper($"{target.GetMemberTarget(property)}.{property.Name}")}"))))));
+                                            marshal.ConvertToWrapper(
+                                                SyntaxFactory.MemberAccessExpression(
+                                                    SyntaxKind.SimpleMemberAccessExpression,
+                                                    SyntaxFactory.IdentifierName(target.GetMemberTarget(property)),
+                                                    SyntaxFactory.IdentifierName(property.Name))))))));
                     if (!property.IsReadOnly)
                     {
                         _list = _list.Add(
@@ -416,8 +459,11 @@ namespace WinRTWrapper.SourceGenerators
                                         SyntaxFactory.ExpressionStatement(
                                             SyntaxFactory.AssignmentExpression(
                                                 SyntaxKind.SimpleAssignmentExpression,
-                                                SyntaxFactory.ParseExpression($"{target.GetMemberTarget(property)}.{property.Name}"),
-                                                SyntaxFactory.ParseExpression(marshal.ConvertToManaged("value"))))))));
+                                                SyntaxFactory.MemberAccessExpression(
+                                                    SyntaxKind.SimpleMemberAccessExpression,
+                                                    SyntaxFactory.IdentifierName(target.GetMemberTarget(property)),
+                                                    SyntaxFactory.IdentifierName(property.Name)),
+                                                marshal.ConvertToManaged(SyntaxFactory.IdentifierName("value"))))))));
                     }
                     return SyntaxFactory.PropertyDeclaration(
                         default,
@@ -441,7 +487,7 @@ namespace WinRTWrapper.SourceGenerators
         {
             (INamedTypeSymbol symbol, INamedTypeSymbol target, IEventSymbol? wrapper, IEventSymbol @event) = source;
             IMethodSymbol invoke = @event.Type.GetMembers().OfType<IMethodSymbol>().FirstOrDefault(x => x.Name == "Invoke");
-            MarshalType marshal = GetWrapperType(Enumerable.Unwrap(wrapper?.GetAttributes(), @event.GetAttributes()), options.Marshals, @event.Type, wrapper?.Type, VarianceKind.None);
+            IMarshalType marshal = GetWrapperType(Enumerable.Unwrap(wrapper?.GetAttributes(), @event.GetAttributes()), options.Marshals, @event.Type, wrapper?.Type, VarianceKind.None);
             switch (options)
             {
                 case { IsWinMDObject: true }:
@@ -495,12 +541,12 @@ namespace WinRTWrapper.SourceGenerators
                                                     SyntaxFactory.SingletonSeparatedList<TypeSyntax>(
                                                         SyntaxFactory.IdentifierName(@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))))),
                                             SyntaxFactory.ArgumentList(),
-                                            default)))))
+                                            default))))))
                         .WithLeadingTrivia(
                             SyntaxFactory.TriviaList(
                                 SyntaxFactory.Comment("/// <summary>"),
                                 SyntaxFactory.Comment($"/// The event registration token table for the <see cref=\"{symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{@event.Name}\"/> event."),
-                                SyntaxFactory.Comment("/// </summary>"))));
+                                SyntaxFactory.Comment("/// </summary>")));
 
                     yield return SyntaxFactory.EventDeclaration(
                         default,
@@ -513,24 +559,77 @@ namespace WinRTWrapper.SourceGenerators
                                 SyntaxFactory.AccessorDeclaration(
                                     SyntaxKind.AddAccessorDeclaration,
                                     SyntaxFactory.Block(
-                                        SyntaxFactory.SingletonList(
-                                            SyntaxFactory.ParseStatement(
-                                                $$"""
-                                                if (!_is_{{@event.Name}}_EventRegistered)
-                                                {
-                                                    {{target.GetMemberTarget(@event)}}.{{@event.Name}} += delegate ({{string.Join(", ", invoke.Parameters.Select(x => x.ToDisplayString()))}}) 
-                                                    {
-                                                        {{@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}} @event = _{{@event.Name}}_EventTable.InvocationList;
-                                                        if (@event != null)
-                                                        {
-                                                            {{(invoke.ReturnsVoid ? string.Empty : "return ")}}@event.Invoke({{string.Join(", ", invoke.Parameters.Select(x => x.Name))}});
-                                                        }
-                                                        return{{(invoke.ReturnsVoid ? string.Empty : $" default({invoke.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)})")}};
-                                                    };
-                                                    _is_{{@event.Name}}_EventRegistered = true;
-                                                }
-                                                return _{{@event.Name}}_EventTable.AddEventHandler({{marshal.ConvertToManaged("value")}});
-                                                """)))),
+                                        SyntaxFactory.IfStatement(
+                                            SyntaxFactory.PrefixUnaryExpression(
+                                                SyntaxKind.LogicalNotExpression,
+                                                SyntaxFactory.IdentifierName($"_is_{@event.Name}_EventRegistered")),
+                                            SyntaxFactory.Block(
+                                                SyntaxFactory.ExpressionStatement(
+                                                    SyntaxFactory.AssignmentExpression(
+                                                        SyntaxKind.AddAssignmentExpression,
+                                                        SyntaxFactory.MemberAccessExpression(
+                                                            SyntaxKind.SimpleMemberAccessExpression,
+                                                            SyntaxFactory.IdentifierName(target.GetMemberTarget(@event)),
+                                                            SyntaxFactory.IdentifierName(@event.Name)),
+                                                        SyntaxFactory.AnonymousMethodExpression(
+                                                            SyntaxFactory.ParameterList(
+                                                                SyntaxFactory.SeparatedList(invoke.Parameters.Select(x => SyntaxFactory.Parameter(SyntaxFactory.Identifier(x.Name)).WithType(SyntaxFactory.IdentifierName(x.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)))))),
+                                                            SyntaxFactory.Block(
+                                                                SyntaxFactory.LocalDeclarationStatement(
+                                                                    SyntaxFactory.VariableDeclaration(
+                                                                        SyntaxFactory.IdentifierName(@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                                                        SyntaxFactory.SingletonSeparatedList(
+                                                                            SyntaxFactory.VariableDeclarator(
+                                                                                SyntaxFactory.Identifier("@event"),
+                                                                                default,
+                                                                                SyntaxFactory.EqualsValueClause(
+                                                                                    SyntaxFactory.MemberAccessExpression(
+                                                                                        SyntaxKind.SimpleMemberAccessExpression,
+                                                                                        SyntaxFactory.IdentifierName($"_{@event.Name}_EventTable"),
+                                                                                        SyntaxFactory.IdentifierName("InvocationList"))))))),
+                                                                SyntaxFactory.IfStatement(
+                                                                    SyntaxFactory.BinaryExpression(
+                                                                        SyntaxKind.NotEqualsExpression,
+                                                                        SyntaxFactory.IdentifierName("@event"),
+                                                                        SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression)),
+                                                                    SyntaxFactory.Block(
+                                                                        SyntaxFactory.SingletonList<StatementSyntax>(
+                                                                            invoke.ReturnsVoid ?
+                                                                                SyntaxFactory.ExpressionStatement(
+                                                                                    SyntaxFactory.InvocationExpression(
+                                                                                        SyntaxFactory.MemberAccessExpression(
+                                                                                            SyntaxKind.SimpleMemberAccessExpression,
+                                                                                            SyntaxFactory.IdentifierName("@event"),
+                                                                                            SyntaxFactory.IdentifierName("Invoke")),
+                                                                                        SyntaxFactory.ArgumentList(
+                                                                                            SyntaxFactory.SeparatedList(invoke.Parameters.Select(x => SyntaxFactory.Argument(SyntaxFactory.IdentifierName(x.Name))))))) :
+                                                                                SyntaxFactory.ReturnStatement(
+                                                                                    SyntaxFactory.InvocationExpression(
+                                                                                        SyntaxFactory.MemberAccessExpression(
+                                                                                            SyntaxKind.SimpleMemberAccessExpression,
+                                                                                            SyntaxFactory.IdentifierName("@event"),
+                                                                                            SyntaxFactory.IdentifierName("Invoke")),
+                                                                                        SyntaxFactory.ArgumentList(
+                                                                                            SyntaxFactory.SeparatedList(invoke.Parameters.Select(x => SyntaxFactory.Argument(SyntaxFactory.IdentifierName(x.Name)))))))))),
+                                                                SyntaxFactory.ReturnStatement(
+                                                                    invoke.ReturnsVoid ? null : SyntaxFactory.DefaultExpression(
+                                                                        SyntaxFactory.IdentifierName(invoke.ReturnType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)))))))),
+                                                SyntaxFactory.ExpressionStatement(
+                                                    SyntaxFactory.AssignmentExpression(
+                                                        SyntaxKind.SimpleAssignmentExpression,
+                                                        SyntaxFactory.IdentifierName($"_is_{@event.Name}_EventRegistered"),
+                                                        SyntaxFactory.Token(SyntaxKind.EqualsToken),
+                                                        SyntaxFactory.LiteralExpression(SyntaxKind.TrueLiteralExpression))))),
+                                        SyntaxFactory.ReturnStatement(
+                                            SyntaxFactory.InvocationExpression(
+                                                SyntaxFactory.MemberAccessExpression(
+                                                    SyntaxKind.SimpleMemberAccessExpression,
+                                                    SyntaxFactory.IdentifierName($"_{@event.Name}_EventTable"),
+                                                    SyntaxFactory.IdentifierName("AddEventHandler")),
+                                                SyntaxFactory.ArgumentList(
+                                                    SyntaxFactory.SingletonSeparatedList(
+                                                        SyntaxFactory.Argument(
+                                                            marshal.ConvertToManaged(SyntaxFactory.IdentifierName("value"))))))))),
                                 SyntaxFactory.AccessorDeclaration(
                                     SyntaxKind.RemoveAccessorDeclaration,
                                     SyntaxFactory.Block(
@@ -569,7 +668,7 @@ namespace WinRTWrapper.SourceGenerators
                                         SyntaxFactory.TypeArgumentList(
                                             SyntaxFactory.SeparatedList<TypeSyntax>([
                                                 SyntaxFactory.IdentifierName(marshal.WrapperTypeName),
-                                        SyntaxFactory.IdentifierName(@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))]))),
+                                                SyntaxFactory.IdentifierName(@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))]))),
                                     SyntaxFactory.SingletonSeparatedList(
                                         SyntaxFactory.VariableDeclarator(
                                             SyntaxFactory.Identifier($"_{@event.Name}_EventWeakTable"),
@@ -581,14 +680,14 @@ namespace WinRTWrapper.SourceGenerators
                                                         SyntaxFactory.TypeArgumentList(
                                                             SyntaxFactory.SeparatedList<TypeSyntax>([
                                                                 SyntaxFactory.IdentifierName(marshal.WrapperTypeName),
-                                                        SyntaxFactory.IdentifierName(@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))]))),
+                                                                SyntaxFactory.IdentifierName(@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))]))),
                                                     SyntaxFactory.ArgumentList(),
-                                                    default)))))
+                                                    default))))))
                                 .WithLeadingTrivia(
                                     SyntaxFactory.TriviaList(
                                         SyntaxFactory.Comment("/// <summary>"),
                                         SyntaxFactory.Comment($"/// The event weak table for the <see cref=\"{symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.{@event.Name}\"/> event."),
-                                        SyntaxFactory.Comment("/// </summary>"))));
+                                        SyntaxFactory.Comment("/// </summary>")));
 
                             yield return SyntaxFactory.EventDeclaration(
                                 default,
@@ -599,77 +698,74 @@ namespace WinRTWrapper.SourceGenerators
                                 SyntaxFactory.AccessorList(
                                     SyntaxFactory.List([
                                         SyntaxFactory.AccessorDeclaration(
-                                    SyntaxKind.AddAccessorDeclaration,
-                                    SyntaxFactory.Block(
-                                        SyntaxFactory.List<StatementSyntax>([
-                                            SyntaxFactory.LocalDeclarationStatement(
-                                                SyntaxFactory.VariableDeclaration(
-                                                    SyntaxFactory.IdentifierName(@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
-                                                    SyntaxFactory.SingletonSeparatedList(
-                                                        SyntaxFactory.VariableDeclarator(
-                                                            SyntaxFactory.Identifier("handle"),
-                                                            default,
-                                                            SyntaxFactory.EqualsValueClause(
-                                                                SyntaxFactory.ParseExpression($"{marshal.ConvertToManaged("value")}")))))),
-                                            SyntaxFactory.ExpressionStatement(
-                                                SyntaxFactory.AssignmentExpression(
-                                                    SyntaxKind.AddAssignmentExpression,
-                                                    SyntaxFactory.MemberAccessExpression(
-                                                        SyntaxKind.SimpleMemberAccessExpression,
-                                                        SyntaxFactory.IdentifierName(target.GetMemberTarget(@event)),
-                                                        SyntaxFactory.IdentifierName(@event.Name)),
-                                                    SyntaxFactory.IdentifierName("handle"))),
-                                            SyntaxFactory.ExpressionStatement(
-                                                SyntaxFactory.InvocationExpression(
-                                                    SyntaxFactory.MemberAccessExpression(
-                                                        SyntaxKind.SimpleMemberAccessExpression,
-                                                        SyntaxFactory.IdentifierName($"_{@event.Name}_EventWeakTable"),
-                                                        SyntaxFactory.IdentifierName("Add")),
-                                                    SyntaxFactory.ArgumentList(
-                                                        SyntaxFactory.SeparatedList([
-                                                            SyntaxFactory.Argument(SyntaxFactory.IdentifierName("value")),
-                                                            SyntaxFactory.Argument(SyntaxFactory.IdentifierName("handle"))]))))]))),
+                                            SyntaxKind.AddAccessorDeclaration,
+                                            SyntaxFactory.Block(
+                                                SyntaxFactory.LocalDeclarationStatement(
+                                                    SyntaxFactory.VariableDeclaration(
+                                                        SyntaxFactory.IdentifierName(@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                                        SyntaxFactory.SingletonSeparatedList(
+                                                            SyntaxFactory.VariableDeclarator(
+                                                                SyntaxFactory.Identifier("handle"),
+                                                                default,
+                                                                SyntaxFactory.EqualsValueClause(
+                                                                    marshal.ConvertToManaged(SyntaxFactory.IdentifierName("value"))))))),
+                                                SyntaxFactory.ExpressionStatement(
+                                                    SyntaxFactory.AssignmentExpression(
+                                                        SyntaxKind.AddAssignmentExpression,
+                                                        SyntaxFactory.MemberAccessExpression(
+                                                            SyntaxKind.SimpleMemberAccessExpression,
+                                                            SyntaxFactory.IdentifierName(target.GetMemberTarget(@event)),
+                                                            SyntaxFactory.IdentifierName(@event.Name)),
+                                                        SyntaxFactory.IdentifierName("handle"))),
+                                                SyntaxFactory.ExpressionStatement(
+                                                    SyntaxFactory.InvocationExpression(
+                                                        SyntaxFactory.MemberAccessExpression(
+                                                            SyntaxKind.SimpleMemberAccessExpression,
+                                                            SyntaxFactory.IdentifierName($"_{@event.Name}_EventWeakTable"),
+                                                            SyntaxFactory.IdentifierName("Add")),
+                                                        SyntaxFactory.ArgumentList(
+                                                            SyntaxFactory.SeparatedList([
+                                                                SyntaxFactory.Argument(SyntaxFactory.IdentifierName("value")),
+                                                                SyntaxFactory.Argument(SyntaxFactory.IdentifierName("handle"))])))))),
                                 SyntaxFactory.AccessorDeclaration(
                                     SyntaxKind.RemoveAccessorDeclaration,
                                     SyntaxFactory.Block(
-                                        SyntaxFactory.List<StatementSyntax>([
-                                            SyntaxFactory.LocalDeclarationStatement(
-                                                SyntaxFactory.VariableDeclaration(
-                                                    SyntaxFactory.IdentifierName(@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
-                                                    SyntaxFactory.SingletonSeparatedList(
-                                                        SyntaxFactory.VariableDeclarator(SyntaxFactory.Identifier("handle"))))),
-                                            SyntaxFactory.IfStatement(
-                                                SyntaxFactory.InvocationExpression(
-                                                    SyntaxFactory.MemberAccessExpression(
-                                                        SyntaxKind.SimpleMemberAccessExpression,
-                                                        SyntaxFactory.IdentifierName($"_{@event.Name}_EventWeakTable"),
-                                                        SyntaxFactory.IdentifierName("TryGetValue")),
-                                                    SyntaxFactory.ArgumentList(
-                                                        SyntaxFactory.SeparatedList([
-                                                            SyntaxFactory.Argument(SyntaxFactory.IdentifierName("value")),
-                                                            SyntaxFactory.Argument(
-                                                                default,
-                                                                SyntaxFactory.Token(SyntaxKind.OutKeyword),
-                                                                SyntaxFactory.IdentifierName("handle"))]))),
-                                                SyntaxFactory.Block(
-                                                    SyntaxFactory.List([
-                                                        SyntaxFactory.ExpressionStatement(
-                                                            SyntaxFactory.AssignmentExpression(
-                                                                SyntaxKind.SubtractAssignmentExpression,
-                                                                SyntaxFactory.MemberAccessExpression(
-                                                                    SyntaxKind.SimpleMemberAccessExpression,
-                                                                    SyntaxFactory.IdentifierName(target.GetMemberTarget(@event)),
-                                                                    SyntaxFactory.IdentifierName(@event.Name)),
-                                                                SyntaxFactory.IdentifierName("handle"))),
-                                                        SyntaxFactory.ExpressionStatement(
-                                                            SyntaxFactory.InvocationExpression(
-                                                                SyntaxFactory.MemberAccessExpression(
-                                                                    SyntaxKind.SimpleMemberAccessExpression,
-                                                                    SyntaxFactory.IdentifierName($"_{@event.Name}_EventWeakTable"),
-                                                                    SyntaxFactory.IdentifierName("Remove")),
-                                                                SyntaxFactory.ArgumentList(
-                                                                    SyntaxFactory.SingletonSeparatedList(
-                                                                        SyntaxFactory.Argument(SyntaxFactory.IdentifierName("value"))))))])))])))])))
+                                        SyntaxFactory.LocalDeclarationStatement(
+                                            SyntaxFactory.VariableDeclaration(
+                                                SyntaxFactory.IdentifierName(@event.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                                SyntaxFactory.SingletonSeparatedList(
+                                                    SyntaxFactory.VariableDeclarator(SyntaxFactory.Identifier("handle"))))),
+                                        SyntaxFactory.IfStatement(
+                                            SyntaxFactory.InvocationExpression(
+                                                SyntaxFactory.MemberAccessExpression(
+                                                    SyntaxKind.SimpleMemberAccessExpression,
+                                                    SyntaxFactory.IdentifierName($"_{@event.Name}_EventWeakTable"),
+                                                    SyntaxFactory.IdentifierName("TryGetValue")),
+                                                SyntaxFactory.ArgumentList(
+                                                    SyntaxFactory.SeparatedList([
+                                                        SyntaxFactory.Argument(SyntaxFactory.IdentifierName("value")),
+                                                        SyntaxFactory.Argument(
+                                                            default,
+                                                            SyntaxFactory.Token(SyntaxKind.OutKeyword),
+                                                            SyntaxFactory.IdentifierName("handle"))]))),
+                                            SyntaxFactory.Block(
+                                                SyntaxFactory.ExpressionStatement(
+                                                    SyntaxFactory.AssignmentExpression(
+                                                        SyntaxKind.SubtractAssignmentExpression,
+                                                        SyntaxFactory.MemberAccessExpression(
+                                                            SyntaxKind.SimpleMemberAccessExpression,
+                                                            SyntaxFactory.IdentifierName(target.GetMemberTarget(@event)),
+                                                            SyntaxFactory.IdentifierName(@event.Name)),
+                                                        SyntaxFactory.IdentifierName("handle"))),
+                                                SyntaxFactory.ExpressionStatement(
+                                                    SyntaxFactory.InvocationExpression(
+                                                        SyntaxFactory.MemberAccessExpression(
+                                                            SyntaxKind.SimpleMemberAccessExpression,
+                                                            SyntaxFactory.IdentifierName($"_{@event.Name}_EventWeakTable"),
+                                                            SyntaxFactory.IdentifierName("Remove")),
+                                                        SyntaxFactory.ArgumentList(
+                                                            SyntaxFactory.SingletonSeparatedList(
+                                                                SyntaxFactory.Argument(SyntaxFactory.IdentifierName("value"))))))))))])))
                                 .WithLeadingTrivia(
                                     SyntaxFactory.TriviaList(
                                         SyntaxFactory.Comment($"/// <inheritdoc cref=\"{@event.GetConstructedFromDocumentationCommentId()}\"/>")));
@@ -690,7 +786,10 @@ namespace WinRTWrapper.SourceGenerators
                                             SyntaxFactory.ExpressionStatement(
                                                 SyntaxFactory.AssignmentExpression(
                                                     SyntaxKind.AddAssignmentExpression,
-                                                    SyntaxFactory.ParseExpression($"{target.GetMemberTarget(@event)}.{@event.Name}"),
+                                                    SyntaxFactory.MemberAccessExpression(
+                                                        SyntaxKind.SimpleMemberAccessExpression,
+                                                        SyntaxFactory.IdentifierName(target.GetMemberTarget(@event)),
+                                                        SyntaxFactory.IdentifierName(@event.Name)),
                                                     SyntaxFactory.IdentifierName("value")))))),
                                 SyntaxFactory.AccessorDeclaration(
                                     SyntaxKind.RemoveAccessorDeclaration,
@@ -699,7 +798,10 @@ namespace WinRTWrapper.SourceGenerators
                                             SyntaxFactory.ExpressionStatement(
                                                 SyntaxFactory.AssignmentExpression(
                                                     SyntaxKind.SubtractAssignmentExpression,
-                                                    SyntaxFactory.ParseExpression($"{target.GetMemberTarget(@event)}.{@event.Name}"),
+                                                    SyntaxFactory.MemberAccessExpression(
+                                                        SyntaxKind.SimpleMemberAccessExpression,
+                                                        SyntaxFactory.IdentifierName(target.GetMemberTarget(@event)),
+                                                        SyntaxFactory.IdentifierName(@event.Name)),
                                                     SyntaxFactory.IdentifierName("value"))))))])))
                                 .WithLeadingTrivia(
                                     SyntaxFactory.TriviaList(
@@ -716,9 +818,9 @@ namespace WinRTWrapper.SourceGenerators
         /// <param name="attributes">The attributes of the type.</param>
         /// <param name="original">The original type symbol.</param>
         /// <returns>The wrapper type and its marshaller if applicable.</returns>
-        private static MarshalType GetWrapperType(IEnumerable<AttributeData> attributes, ImmutableArray<MarshalType> marshals, ITypeSymbol original, ITypeSymbol? expect = null, VarianceKind variance = VarianceKind.None)
+        private static IMarshalType GetWrapperType(IEnumerable<AttributeData> attributes, ImmutableArray<IMarshalType> marshals, ITypeSymbol original, ITypeSymbol? expect = null, VarianceKind variance = VarianceKind.None)
         {
-            static bool GetWrapperType(IEnumerable<AttributeData> attributes, string name, ITypeSymbol original, ITypeSymbol? expect, VarianceKind variance, [NotNullWhen(true)] out MarshalType? marshal)
+            static bool GetWrapperType(IEnumerable<AttributeData> attributes, string name, ITypeSymbol original, ITypeSymbol? expect, VarianceKind variance, [NotNullWhen(true)] out IMarshalType? marshal)
             {
                 if (attributes.FirstOrDefault(x =>
                     x.AttributeClass?.Name == name
@@ -743,7 +845,7 @@ namespace WinRTWrapper.SourceGenerators
                 return false;
             }
 
-            static bool GetWrapperTypeByExpect(ITypeSymbol original, ITypeSymbol expect, VarianceKind variance, [NotNullWhen(true)] out MarshalType? marshal)
+            static bool GetWrapperTypeByExpect(ITypeSymbol original, ITypeSymbol expect, VarianceKind variance, [NotNullWhen(true)] out IMarshalType? marshal)
             {
                 if (expect.GetAttributes().FirstOrDefault(x =>
                     x.AttributeClass is { Name: nameof(WinRTWrapperMarshallerAttribute) }
@@ -762,13 +864,13 @@ namespace WinRTWrapper.SourceGenerators
                 return false;
             }
 
-            static bool GetMarshalType(ImmutableArray<MarshalType> marshals, ITypeSymbol original, ITypeSymbol? expect, VarianceKind variance, [NotNullWhen(true)] out MarshalType? marshal)
+            static bool GetMarshalType(ImmutableArray<IMarshalType> marshals, ITypeSymbol original, ITypeSymbol? expect, VarianceKind variance, [NotNullWhen(true)] out IMarshalType? marshal)
             {
-                if (marshals.FirstOrDefault(x => CheckSuitable(x.ManagedType, x.WrapperType, original, expect, variance)) is MarshalType marshier)
+                if (marshals.FirstOrDefault(x => CheckSuitable(x.ManagedType, x.WrapperType, original, expect, variance)) is IMarshalType marshier)
                 {
                     if (marshier is IMarshalGenericType generic && original is INamedTypeSymbol symbol)
                     {
-                        generic.GenericArguments = symbol.TypeArguments;
+                        marshier = generic.WithTypeArguments(symbol.TypeArguments);
                     }
                     marshal = marshier;
                     return true;
@@ -789,7 +891,7 @@ namespace WinRTWrapper.SourceGenerators
                 return original.IsSuitable(managed, variance) && expect?.IsSuitable(wrapper, variance.Negative()) != false;
             }
 
-            return GetWrapperType(attributes, nameof(WinRTWrapperMarshalUsingAttribute), original, expect, variance, out MarshalType? marshal) ? marshal
+            return GetWrapperType(attributes, nameof(WinRTWrapperMarshalUsingAttribute), original, expect, variance, out IMarshalType? marshal) ? marshal
                 : GetWrapperType(original.GetAttributes(), nameof(WinRTWrapperMarshallingAttribute), original, expect, variance, out marshal) ? marshal
                 : expect != null && GetWrapperTypeByExpect(original, expect, variance, out marshal) ? marshal
                 : GetMarshalType(marshals, original, expect, variance, out marshal) ? marshal

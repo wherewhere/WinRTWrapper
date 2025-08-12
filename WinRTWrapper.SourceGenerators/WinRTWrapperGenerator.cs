@@ -163,13 +163,13 @@ namespace WinRTWrapper.SourceGenerators
             context.AddSource($"{symbol.Name}.g.cs", compilationUnitSyntax.GetText(Encoding.UTF8));
         }
 
-        private static IEnumerable<ISymbolWrapper> GetMembers(WrapperType source, ImmutableArray<MarshalType> marshals)
+        private static IEnumerable<ISymbolWrapper> GetMembers(WrapperType source, ImmutableArray<IMarshalType> marshals)
         {
             (INamedTypeSymbol symbol, INamedTypeSymbol target, GenerateMember member, ImmutableArray<INamedTypeSymbol> interfaces) = source;
             switch (member)
             {
                 case SourceGenerators.GenerateMember.All:
-                    static IEnumerable<ISymbolWrapper> GetISymbolWrappers(INamedTypeSymbol symbol, INamedTypeSymbol target, ImmutableArray<MarshalType> marshals)
+                    static IEnumerable<ISymbolWrapper> GetISymbolWrappers(INamedTypeSymbol symbol, INamedTypeSymbol target, ImmutableArray<IMarshalType> marshals)
                     {
                         foreach (ISymbol item in target.GetAllMembers())
                         {
@@ -219,7 +219,7 @@ namespace WinRTWrapper.SourceGenerators
                 };
             }
 
-            static bool IsSameMember(ISymbol wrapper, ISymbol target, ImmutableArray<MarshalType> marshals)
+            static bool IsSameMember(ISymbol wrapper, ISymbol target, ImmutableArray<IMarshalType> marshals)
             {
                 switch (wrapper, target)
                 {
@@ -253,8 +253,8 @@ namespace WinRTWrapper.SourceGenerators
                             {
                                 if (!w.ReturnType.Equals(t.ReturnType, SymbolEqualityComparer.Default))
                                 {
-                                    MarshalType returnType = GetWrapperType(Enumerable.Unwrap(w.GetReturnTypeAttributes(), t.GetReturnTypeAttributes()), marshals, t.ReturnType, w.ReturnType, VarianceKind.Out);
-                                    if (returnType is MarshalTypeWithArgs { Arguments: { Length: > 0 } arguments } returnWithArgs)
+                                    IMarshalType returnType = GetWrapperType(Enumerable.Unwrap(w.GetReturnTypeAttributes(), t.GetReturnTypeAttributes()), marshals, t.ReturnType, w.ReturnType, VarianceKind.Out);
+                                    if (returnType is IMarshalTypeWithArgs { Arguments: { Length: > 0 } arguments } returnWithArgs)
                                     {
                                         ImmutableArray<IParameterSymbol> parameters = t.Parameters;
                                         if (parameters.Length >= arguments.Length)
@@ -325,7 +325,7 @@ namespace WinRTWrapper.SourceGenerators
                 }
             }
 
-            static bool IsWrapperType(IEnumerable<AttributeData> attributes, ImmutableArray<MarshalType> marshals, ITypeSymbol original, ITypeSymbol? expect = null, VarianceKind variance = VarianceKind.None)
+            static bool IsWrapperType(IEnumerable<AttributeData> attributes, ImmutableArray<IMarshalType> marshals, ITypeSymbol original, ITypeSymbol? expect = null, VarianceKind variance = VarianceKind.None)
             {
                 static bool IsWrapperType(IEnumerable<AttributeData> attributes, string name, ITypeSymbol original, ITypeSymbol? expect, VarianceKind variance = VarianceKind.None)
                 {
@@ -359,9 +359,9 @@ namespace WinRTWrapper.SourceGenerators
                     return false;
                 }
 
-                static bool IsMarshalType(ImmutableArray<MarshalType> marshals, ITypeSymbol original, ITypeSymbol? expect, VarianceKind variance = VarianceKind.None)
+                static bool IsMarshalType(ImmutableArray<IMarshalType> marshals, ITypeSymbol original, ITypeSymbol? expect, VarianceKind variance = VarianceKind.None)
                 {
-                    if (marshals.FirstOrDefault(x => CheckSuitable(x.ManagedType, x.WrapperType, original, expect, variance)) is MarshalType marshier)
+                    if (marshals.FirstOrDefault(x => CheckSuitable(x.ManagedType, x.WrapperType, original, expect, variance)) is IMarshalType marshier)
                     {
                         return true;
                     }
