@@ -836,8 +836,32 @@ namespace WinRTWrapper.SourceGenerators
                         marshal = new MarshalType(
                             managed,
                             wrapper,
-                            inner => $"({wrapper.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}){marshaller.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.ConvertToWrapper(({managed.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)})({inner}))",
-                            inner => $"({managed.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}){marshaller.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.ConvertToManaged(({wrapper.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)})({inner}))");
+                            expression => SyntaxFactory.CastExpression(
+                                SyntaxFactory.IdentifierName(wrapper.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                SyntaxFactory.InvocationExpression(
+                                    SyntaxFactory.MemberAccessExpression(
+                                        SyntaxKind.SimpleMemberAccessExpression,
+                                        SyntaxFactory.IdentifierName(marshaller.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                        SyntaxFactory.IdentifierName("ConvertToWrapper")),
+                                    SyntaxFactory.ArgumentList(
+                                        SyntaxFactory.SingletonSeparatedList(
+                                            SyntaxFactory.Argument(
+                                                SyntaxFactory.CastExpression(
+                                                    SyntaxFactory.IdentifierName(managed.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                                    SyntaxFactory.ParenthesizedExpression(expression))))))),
+                            expression => SyntaxFactory.CastExpression(
+                                SyntaxFactory.IdentifierName(managed.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                SyntaxFactory.InvocationExpression(
+                                    SyntaxFactory.MemberAccessExpression(
+                                        SyntaxKind.SimpleMemberAccessExpression,
+                                        SyntaxFactory.IdentifierName(marshaller.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                        SyntaxFactory.IdentifierName("ConvertToManaged")),
+                                    SyntaxFactory.ArgumentList(
+                                        SyntaxFactory.SingletonSeparatedList(
+                                            SyntaxFactory.Argument(
+                                                SyntaxFactory.CastExpression(
+                                                    SyntaxFactory.IdentifierName(wrapper.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                                    SyntaxFactory.ParenthesizedExpression(expression))))))));
                         return true;
                     }
                 }
@@ -856,8 +880,32 @@ namespace WinRTWrapper.SourceGenerators
                     marshal = new MarshalType(
                         managed,
                         wrapper,
-                        inner => $"({wrapper.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}){expect.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.ConvertToWrapper(({managed.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)})({inner}))",
-                        inner => $"({managed.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}){expect.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}.ConvertToManaged(({wrapper.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)})({inner}))");
+                        expression => SyntaxFactory.CastExpression(
+                            SyntaxFactory.IdentifierName(wrapper.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                            SyntaxFactory.InvocationExpression(
+                                SyntaxFactory.MemberAccessExpression(
+                                    SyntaxKind.SimpleMemberAccessExpression,
+                                    SyntaxFactory.IdentifierName(expect.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                    SyntaxFactory.IdentifierName("ConvertToWrapper")),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.CastExpression(
+                                                SyntaxFactory.IdentifierName(managed.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                                SyntaxFactory.ParenthesizedExpression(expression))))))),
+                        expression => SyntaxFactory.CastExpression(
+                            SyntaxFactory.IdentifierName(managed.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                            SyntaxFactory.InvocationExpression(
+                                SyntaxFactory.MemberAccessExpression(
+                                    SyntaxKind.SimpleMemberAccessExpression,
+                                    SyntaxFactory.IdentifierName(expect.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                    SyntaxFactory.IdentifierName("ConvertToManaged")),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.CastExpression(
+                                                SyntaxFactory.IdentifierName(wrapper.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                                SyntaxFactory.ParenthesizedExpression(expression))))))));
                     return true;
                 }
                 marshal = default;

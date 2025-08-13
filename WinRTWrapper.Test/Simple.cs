@@ -463,9 +463,9 @@ namespace WinRTWrapper.Test
         /// </summary>
         /// <returns>A <see cref="ValueTask{TResult}"/> representing the asynchronous operation. The result contains the integer
         /// value retrieved.</returns>
-        public static ValueTask<int> GetGenericValueTaskAsync()
+        public static ValueTask<int> GetGenericValueTaskAsync(ValueTask<int> task)
         {
-            return ValueTask.FromResult(_field);
+            return task;
         }
 
         /// <summary>
@@ -474,9 +474,10 @@ namespace WinRTWrapper.Test
         /// <param name="cancellationToken">A <see cref="CancellationToken"/> that can be used to cancel the operation.</param>
         /// <returns>A <see cref="ValueTask{TResult}"/> representing the asynchronous operation. The result contains the integer
         /// value retrieved.</returns>
-        public static ValueTask<int> GetGenericValueTaskWithTokenAsync(CancellationToken cancellationToken = default)
+        public static ValueTask<int> GetGenericValueTaskWithTokenAsync(ValueTask<int> task, CancellationToken cancellationToken = default)
         {
-            return ValueTask.FromResult(_field);
+            cancellationToken.ThrowIfCancellationRequested();
+            return task;
         }
 #endif
     }

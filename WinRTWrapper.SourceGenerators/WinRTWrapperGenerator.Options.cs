@@ -1,4 +1,6 @@
 ﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 using System;
 using System.Collections.Generic;
@@ -39,10 +41,50 @@ namespace WinRTWrapper.SourceGenerators
                         yield return new MarshalGenericTypeWithArgs(
                             taskOfT,
                             asyncOperation,
-                            static inner => $"global::System.WindowsRuntimeSystemExtensions.AsAsyncOperation(({inner}))",
-                            static inner => $"global::System.WindowsRuntimeSystemExtensions.AsTask(({inner}))",
-                            static (inner, args) => $"global::System.Runtime.InteropServices.WindowsRuntime.AsyncInfo.Run(delegate ({string.Join(", ", args.Select(x => $"{x.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)} {x.Name}"))}) {{ return {inner(args)}; }})",
-                            static (inner, args) => $"global::System.WindowsRuntimeSystemExtensions.AsTask(({inner}, {string.Join(", ", args.Select(x => x.Name))}))",
+                            static (expression, _) => SyntaxFactory.InvocationExpression(
+                                SyntaxFactory.MemberAccessExpression(
+                                    SyntaxKind.SimpleMemberAccessExpression,
+                                    SyntaxFactory.IdentifierName("global::System.WindowsRuntimeSystemExtensions"),
+                                    SyntaxFactory.IdentifierName("AsAsyncOperation")),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.ParenthesizedExpression(expression))))),
+                            static (expression, _) => SyntaxFactory.InvocationExpression(
+                                SyntaxFactory.MemberAccessExpression(
+                                    SyntaxKind.SimpleMemberAccessExpression,
+                                    SyntaxFactory.IdentifierName("global::System.WindowsRuntimeSystemExtensions"),
+                                    SyntaxFactory.IdentifierName("AsTask")),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.ParenthesizedExpression(expression))))),
+                            static (expression, args, _) => SyntaxFactory.InvocationExpression(
+                                SyntaxFactory.MemberAccessExpression(
+                                    SyntaxKind.SimpleMemberAccessExpression,
+                                    SyntaxFactory.IdentifierName("global::System.Runtime.InteropServices.WindowsRuntime.AsyncInfo"),
+                                    SyntaxFactory.IdentifierName("Run")),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.AnonymousMethodExpression(
+                                                SyntaxFactory.ParameterList(
+                                                    SyntaxFactory.SeparatedList(args.Select(x => SyntaxFactory.Parameter(SyntaxFactory.Identifier(x.Name)).WithType(SyntaxFactory.IdentifierName( x.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)))))),
+                                                SyntaxFactory.Block(
+                                                    SyntaxFactory.SingletonList(
+                                                        SyntaxFactory.ReturnStatement(
+                                                            SyntaxFactory.ParenthesizedExpression(expression(args)))))))))),
+                            static (expression, args, _) => SyntaxFactory.InvocationExpression(
+                                SyntaxFactory.MemberAccessExpression(
+                                    SyntaxKind.SimpleMemberAccessExpression,
+                                    SyntaxFactory.IdentifierName("global::System.WindowsRuntimeSystemExtensions"),
+                                    SyntaxFactory.IdentifierName("AsTask")),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SeparatedList(
+                                        System.Linq.Enumerable.Concat([
+                                            SyntaxFactory.Argument(
+                                                SyntaxFactory.ParenthesizedExpression(expression))],
+                                            args.Select(x => SyntaxFactory.Argument(SyntaxFactory.IdentifierName(x.Name))))))),
                             taskOfT.TypeArguments,
                             cancellationToken);
                     }
@@ -51,8 +93,24 @@ namespace WinRTWrapper.SourceGenerators
                         yield return new MarshalGenericType(
                             taskOfT,
                             asyncOperation,
-                            static inner => $"global::System.WindowsRuntimeSystemExtensions.AsAsyncOperation(({inner}))",
-                            static inner => $"global::System.WindowsRuntimeSystemExtensions.AsTask(({inner}))",
+                            static (expression, _) => SyntaxFactory.InvocationExpression(
+                                SyntaxFactory.MemberAccessExpression(
+                                    SyntaxKind.SimpleMemberAccessExpression,
+                                    SyntaxFactory.IdentifierName("global::System.WindowsRuntimeSystemExtensions"),
+                                    SyntaxFactory.IdentifierName("AsAsyncOperation")),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.ParenthesizedExpression(expression))))),
+                            static (expression, _) => SyntaxFactory.InvocationExpression(
+                                SyntaxFactory.MemberAccessExpression(
+                                    SyntaxKind.SimpleMemberAccessExpression,
+                                    SyntaxFactory.IdentifierName("global::System.WindowsRuntimeSystemExtensions"),
+                                    SyntaxFactory.IdentifierName("AsTask")),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.ParenthesizedExpression(expression))))),
                             taskOfT.TypeArguments);
                     }
                 }
@@ -67,10 +125,50 @@ namespace WinRTWrapper.SourceGenerators
                         yield return new MarshalTypeWithArgs(
                             task,
                             asyncAction,
-                            static inner => $"global::System.WindowsRuntimeSystemExtensions.AsAsyncAction({inner})",
-                            static inner => $"global::System.WindowsRuntimeSystemExtensions.AsTask({inner})",
-                            static (inner, args) => $"global::System.Runtime.InteropServices.WindowsRuntime.AsyncInfo.Run(delegate ({string.Join(", ", args.Select(x => $"{x.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)} {x.Name}"))}) {{ return {inner(args)}; }})",
-                            static (inner, args) => $"global::System.WindowsRuntimeSystemExtensions.AsTask(({inner}, {string.Join(", ", args.Select(x => x.Name))}))",
+                            static expression => SyntaxFactory.InvocationExpression(
+                                SyntaxFactory.MemberAccessExpression(
+                                    SyntaxKind.SimpleMemberAccessExpression,
+                                    SyntaxFactory.IdentifierName("global::System.WindowsRuntimeSystemExtensions"),
+                                    SyntaxFactory.IdentifierName("AsAsyncAction")),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.ParenthesizedExpression(expression))))),
+                            static expression => SyntaxFactory.InvocationExpression(
+                                SyntaxFactory.MemberAccessExpression(
+                                    SyntaxKind.SimpleMemberAccessExpression,
+                                    SyntaxFactory.IdentifierName("global::System.WindowsRuntimeSystemExtensions"),
+                                    SyntaxFactory.IdentifierName("AsTask")),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.ParenthesizedExpression(expression))))),
+                            static (expression, args) => SyntaxFactory.InvocationExpression(
+                                SyntaxFactory.MemberAccessExpression(
+                                    SyntaxKind.SimpleMemberAccessExpression,
+                                    SyntaxFactory.IdentifierName("global::System.Runtime.InteropServices.WindowsRuntime.AsyncInfo"),
+                                    SyntaxFactory.IdentifierName("Run")),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.AnonymousMethodExpression(
+                                                SyntaxFactory.ParameterList(
+                                                    SyntaxFactory.SeparatedList(args.Select(x => SyntaxFactory.Parameter(SyntaxFactory.Identifier(x.Name)).WithType(SyntaxFactory.IdentifierName(x.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)))))),
+                                                SyntaxFactory.Block(
+                                                    SyntaxFactory.SingletonList(
+                                                        SyntaxFactory.ReturnStatement(
+                                                            SyntaxFactory.ParenthesizedExpression(expression(args)))))))))),
+                            static (expression, args) => SyntaxFactory.InvocationExpression(
+                                SyntaxFactory.MemberAccessExpression(
+                                    SyntaxKind.SimpleMemberAccessExpression,
+                                    SyntaxFactory.IdentifierName("global::System.WindowsRuntimeSystemExtensions"),
+                                    SyntaxFactory.IdentifierName("AsTask")),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SeparatedList(
+                                        System.Linq.Enumerable.Concat([
+                                            SyntaxFactory.Argument(
+                                                SyntaxFactory.ParenthesizedExpression(expression))],
+                                            args.Select(x => SyntaxFactory.Argument(SyntaxFactory.IdentifierName(x.Name))))))),
                             cancellationToken);
                     }
                     else
@@ -78,8 +176,24 @@ namespace WinRTWrapper.SourceGenerators
                         yield return new MarshalType(
                             task,
                             asyncAction,
-                            static inner => $"global::System.WindowsRuntimeSystemExtensions.AsAsyncAction({inner})",
-                            static inner => $"global::System.WindowsRuntimeSystemExtensions.AsTask({inner})");
+                            static expression => SyntaxFactory.InvocationExpression(
+                                SyntaxFactory.MemberAccessExpression(
+                                    SyntaxKind.SimpleMemberAccessExpression,
+                                    SyntaxFactory.IdentifierName("global::System.WindowsRuntimeSystemExtensions"),
+                                    SyntaxFactory.IdentifierName("AsAsyncAction")),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.ParenthesizedExpression(expression))))),
+                            static expression => SyntaxFactory.InvocationExpression(
+                                SyntaxFactory.MemberAccessExpression(
+                                    SyntaxKind.SimpleMemberAccessExpression,
+                                    SyntaxFactory.IdentifierName("global::System.WindowsRuntimeSystemExtensions"),
+                                    SyntaxFactory.IdentifierName("AsTask")),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.ParenthesizedExpression(expression))))));
                     }
                 }
             }
@@ -93,10 +207,82 @@ namespace WinRTWrapper.SourceGenerators
                         yield return new MarshalGenericTypeWithArgs(
                             valueTaskOfT,
                             asyncOperation,
-                            static inner => $"global::System.WindowsRuntimeSystemExtensions.AsAsyncOperation(({inner}).AsTask())",
-                            static inner => $"new global::System.Threading.Tasks.ValueTask(global::System.WindowsRuntimeSystemExtensions.AsTask({inner}))",
-                            static (inner, args) => $"global::System.Runtime.InteropServices.WindowsRuntime.AsyncInfo.Run(delegate ({string.Join(", ", args.Select(x => $"{x.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)} {x.Name}"))}) {{ return ({inner(args)}).AsTask(); }})",
-                            static (inner, args) => $"new global::System.Threading.Tasks.ValueTask(global::System.WindowsRuntimeSystemExtensions.AsTask(({inner}, {string.Join(", ", args.Select(x => x.Name))})))",
+                            static (expression, _) => SyntaxFactory.InvocationExpression(
+                                SyntaxFactory.MemberAccessExpression(
+                                    SyntaxKind.SimpleMemberAccessExpression,
+                                    SyntaxFactory.IdentifierName("global::System.WindowsRuntimeSystemExtensions"),
+                                    SyntaxFactory.IdentifierName("AsAsyncOperation")),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.InvocationExpression(
+                                                SyntaxFactory.MemberAccessExpression(
+                                                    SyntaxKind.SimpleMemberAccessExpression,
+                                                    SyntaxFactory.ParenthesizedExpression(expression),
+                                                    SyntaxFactory.IdentifierName("AsTask"))))))),
+                            static (expression, typeArgs) => SyntaxFactory.ObjectCreationExpression(
+                                SyntaxFactory.GenericName(
+                                    SyntaxFactory.Identifier("global::System.Threading.Tasks.ValueTask"),
+                                    SyntaxFactory.TypeArgumentList(
+                                        SyntaxFactory.SeparatedList<TypeSyntax>(
+                                            typeArgs.Select(x =>
+                                                SyntaxFactory.IdentifierName(
+                                                    x.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)))))),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.InvocationExpression(
+                                                SyntaxFactory.MemberAccessExpression(
+                                                    SyntaxKind.SimpleMemberAccessExpression,
+                                                    SyntaxFactory.IdentifierName("global::System.WindowsRuntimeSystemExtensions"),
+                                                    SyntaxFactory.IdentifierName("AsTask")),
+                                                SyntaxFactory.ArgumentList(
+                                                    SyntaxFactory.SingletonSeparatedList(
+                                                        SyntaxFactory.Argument(
+                                                            SyntaxFactory.ParenthesizedExpression(expression)))))))),
+                                default),
+                            static (expression, args, _) => SyntaxFactory.InvocationExpression(
+                                SyntaxFactory.MemberAccessExpression(
+                                    SyntaxKind.SimpleMemberAccessExpression,
+                                    SyntaxFactory.IdentifierName("global::System.Runtime.InteropServices.WindowsRuntime.AsyncInfo"),
+                                    SyntaxFactory.IdentifierName("Run")),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.AnonymousMethodExpression(
+                                                SyntaxFactory.ParameterList(
+                                                    SyntaxFactory.SeparatedList(args.Select(x => SyntaxFactory.Parameter(SyntaxFactory.Identifier(x.Name)).WithType(SyntaxFactory.IdentifierName(x.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)))))),
+                                                SyntaxFactory.Block(
+                                                    SyntaxFactory.SingletonList(
+                                                        SyntaxFactory.ReturnStatement(
+                                                            SyntaxFactory.InvocationExpression(
+                                                                SyntaxFactory.MemberAccessExpression(
+                                                                    SyntaxKind.SimpleMemberAccessExpression,
+                                                                    SyntaxFactory.ParenthesizedExpression(expression(args)),
+                                                                    SyntaxFactory.IdentifierName("AsTask"))))))))))),
+                            static (expression, args, typeArgs) => SyntaxFactory.ObjectCreationExpression(
+                                SyntaxFactory.GenericName(
+                                    SyntaxFactory.Identifier("global::System.Threading.Tasks.ValueTask"),
+                                    SyntaxFactory.TypeArgumentList(
+                                        SyntaxFactory.SeparatedList<TypeSyntax>(
+                                            typeArgs.Select(x =>
+                                                SyntaxFactory.IdentifierName(
+                                                    x.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)))))),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.InvocationExpression(
+                                                SyntaxFactory.MemberAccessExpression(
+                                                    SyntaxKind.SimpleMemberAccessExpression,
+                                                    SyntaxFactory.IdentifierName("global::System.WindowsRuntimeSystemExtensions"),
+                                                    SyntaxFactory.IdentifierName("AsTask")),
+                                                SyntaxFactory.ArgumentList(
+                                                    SyntaxFactory.SeparatedList(
+                                                        System.Linq.Enumerable.Concat([
+                                                            SyntaxFactory.Argument(
+                                                                SyntaxFactory.ParenthesizedExpression(expression))],
+                                                            args.Select(x => SyntaxFactory.Argument(SyntaxFactory.IdentifierName(x.Name)))))))))),
+                                default),
                             valueTaskOfT.TypeArguments,
                             cancellationToken);
                     }
@@ -105,8 +291,40 @@ namespace WinRTWrapper.SourceGenerators
                         yield return new MarshalGenericType(
                             valueTaskOfT,
                             asyncOperation,
-                            static inner => $"global::System.WindowsRuntimeSystemExtensions.AsAsyncOperation(({inner}).AsTask())",
-                            static inner => $"new global::System.Threading.Tasks.ValueTask(global::System.WindowsRuntimeSystemExtensions.AsTask({inner}))",
+                            static (expression, _) => SyntaxFactory.InvocationExpression(
+                                SyntaxFactory.MemberAccessExpression(
+                                    SyntaxKind.SimpleMemberAccessExpression,
+                                    SyntaxFactory.IdentifierName("global::System.WindowsRuntimeSystemExtensions"),
+                                    SyntaxFactory.IdentifierName("AsAsyncOperation")),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.InvocationExpression(
+                                                SyntaxFactory.MemberAccessExpression(
+                                                    SyntaxKind.SimpleMemberAccessExpression,
+                                                    SyntaxFactory.ParenthesizedExpression(expression),
+                                                    SyntaxFactory.IdentifierName("AsTask"))))))),
+                            static (expression, typeArgs) => SyntaxFactory.ObjectCreationExpression(
+                                SyntaxFactory.GenericName(
+                                    SyntaxFactory.Identifier("global::System.Threading.Tasks.ValueTask"),
+                                    SyntaxFactory.TypeArgumentList(
+                                        SyntaxFactory.SeparatedList<TypeSyntax>(
+                                            typeArgs.Select(x =>
+                                                SyntaxFactory.IdentifierName(
+                                                    x.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)))))),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.InvocationExpression(
+                                                SyntaxFactory.MemberAccessExpression(
+                                                    SyntaxKind.SimpleMemberAccessExpression,
+                                                    SyntaxFactory.IdentifierName("global::System.WindowsRuntimeSystemExtensions"),
+                                                    SyntaxFactory.IdentifierName("AsTask")),
+                                                SyntaxFactory.ArgumentList(
+                                                    SyntaxFactory.SingletonSeparatedList(
+                                                        SyntaxFactory.Argument(
+                                                            SyntaxFactory.ParenthesizedExpression(expression)))))))),
+                                default),
                             valueTaskOfT.TypeArguments);
                     }
                 }
@@ -121,10 +339,70 @@ namespace WinRTWrapper.SourceGenerators
                         yield return new MarshalTypeWithArgs(
                             valueTask,
                             asyncAction,
-                            static inner => $"global::System.WindowsRuntimeSystemExtensions.AsAsyncAction(({inner}).AsTask())",
-                            static inner => $"new global::System.Threading.Tasks.ValueTask(global::System.WindowsRuntimeSystemExtensions.AsTask({inner}))",
-                            static (inner, args) => $"global::System.Runtime.InteropServices.WindowsRuntime.AsyncInfo.Run(delegate ({string.Join(", ", args.Select(x => $"{x.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)} {x.Name}"))}) {{ return ({inner(args)}).AsTask(); }})",
-                            static (inner, args) => $"new global::System.Threading.Tasks.ValueTask(global::System.WindowsRuntimeSystemExtensions.AsTask(({inner}, {string.Join(", ", args.Select(x => x.Name))})))",
+                            static expression => SyntaxFactory.InvocationExpression(
+                                SyntaxFactory.MemberAccessExpression(
+                                    SyntaxKind.SimpleMemberAccessExpression,
+                                    SyntaxFactory.IdentifierName("global::System.WindowsRuntimeSystemExtensions"),
+                                    SyntaxFactory.IdentifierName("AsAsyncAction")),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.InvocationExpression(
+                                                SyntaxFactory.MemberAccessExpression(
+                                                    SyntaxKind.SimpleMemberAccessExpression,
+                                                    SyntaxFactory.ParenthesizedExpression(expression),
+                                                    SyntaxFactory.IdentifierName("AsTask"))))))),
+                            static expression => SyntaxFactory.ObjectCreationExpression(
+                                SyntaxFactory.IdentifierName("global::System.Threading.Tasks.ValueTask"),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.InvocationExpression(
+                                                SyntaxFactory.MemberAccessExpression(
+                                                    SyntaxKind.SimpleMemberAccessExpression,
+                                                    SyntaxFactory.IdentifierName("global::System.WindowsRuntimeSystemExtensions"),
+                                                    SyntaxFactory.IdentifierName("AsTask")),
+                                                SyntaxFactory.ArgumentList(
+                                                    SyntaxFactory.SingletonSeparatedList(
+                                                        SyntaxFactory.Argument(
+                                                            SyntaxFactory.ParenthesizedExpression(expression)))))))),
+                                default),
+                            static (expression, args) => SyntaxFactory.InvocationExpression(
+                                SyntaxFactory.MemberAccessExpression(
+                                    SyntaxKind.SimpleMemberAccessExpression,
+                                    SyntaxFactory.IdentifierName("global::System.Runtime.InteropServices.WindowsRuntime.AsyncInfo"),
+                                    SyntaxFactory.IdentifierName("Run")),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.AnonymousMethodExpression(
+                                                SyntaxFactory.ParameterList(
+                                                    SyntaxFactory.SeparatedList(args.Select(x => SyntaxFactory.Parameter(SyntaxFactory.Identifier(x.Name)).WithType(SyntaxFactory.IdentifierName(x.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)))))),
+                                                SyntaxFactory.Block(
+                                                    SyntaxFactory.SingletonList(
+                                                        SyntaxFactory.ReturnStatement(
+                                                            SyntaxFactory.InvocationExpression(
+                                                                SyntaxFactory.MemberAccessExpression(
+                                                                    SyntaxKind.SimpleMemberAccessExpression,
+                                                                    SyntaxFactory.ParenthesizedExpression(expression(args)),
+                                                                    SyntaxFactory.IdentifierName("AsTask"))))))))))),
+                            static (expression, args) => SyntaxFactory.ObjectCreationExpression(
+                                SyntaxFactory.IdentifierName("global::System.Threading.Tasks.ValueTask"),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.InvocationExpression(
+                                                SyntaxFactory.MemberAccessExpression(
+                                                    SyntaxKind.SimpleMemberAccessExpression,
+                                                    SyntaxFactory.IdentifierName("global::System.WindowsRuntimeSystemExtensions"),
+                                                    SyntaxFactory.IdentifierName("AsTask")),
+                                                SyntaxFactory.ArgumentList(
+                                                    SyntaxFactory.SeparatedList(
+                                                        System.Linq.Enumerable.Concat([
+                                                            SyntaxFactory.Argument(
+                                                                SyntaxFactory.ParenthesizedExpression(expression))],
+                                                            args.Select(x => SyntaxFactory.Argument(SyntaxFactory.IdentifierName(x.Name)))))))))),
+                                default),
                             cancellationToken);
                     }
                     else
@@ -132,8 +410,34 @@ namespace WinRTWrapper.SourceGenerators
                         yield return new MarshalType(
                             valueTask,
                             asyncAction,
-                            static inner => $"global::System.WindowsRuntimeSystemExtensions.AsAsyncAction(({inner}).AsTask())",
-                            static inner => $"new global::System.Threading.Tasks.ValueTask(global::System.WindowsRuntimeSystemExtensions.AsTask({inner}))");
+                            static expression => SyntaxFactory.InvocationExpression(
+                                SyntaxFactory.MemberAccessExpression(
+                                    SyntaxKind.SimpleMemberAccessExpression,
+                                    SyntaxFactory.IdentifierName("global::System.WindowsRuntimeSystemExtensions"),
+                                    SyntaxFactory.IdentifierName("AsAsyncAction")),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.InvocationExpression(
+                                                SyntaxFactory.MemberAccessExpression(
+                                                    SyntaxKind.SimpleMemberAccessExpression,
+                                                    SyntaxFactory.ParenthesizedExpression(expression),
+                                                    SyntaxFactory.IdentifierName("AsTask"))))))),
+                            static expression => SyntaxFactory.ObjectCreationExpression(
+                                SyntaxFactory.IdentifierName("global::System.Threading.Tasks.ValueTask"),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.InvocationExpression(
+                                                SyntaxFactory.MemberAccessExpression(
+                                                    SyntaxKind.SimpleMemberAccessExpression,
+                                                    SyntaxFactory.IdentifierName("global::System.WindowsRuntimeSystemExtensions"),
+                                                    SyntaxFactory.IdentifierName("AsTask")),
+                                                SyntaxFactory.ArgumentList(
+                                                    SyntaxFactory.SingletonSeparatedList(
+                                                        SyntaxFactory.Argument(
+                                                            SyntaxFactory.ParenthesizedExpression(expression)))))))),
+                                default));
                     }
                 }
             }
@@ -145,8 +449,24 @@ namespace WinRTWrapper.SourceGenerators
                     yield return new MarshalType(
                         stream,
                         randomAccessStream,
-                        static inner => $"global::System.IO.WindowsRuntimeStreamExtensions.AsRandomAccessStream({inner})",
-                        static inner => $"global::System.IO.WindowsRuntimeStreamExtensions.AsStream({inner})");
+                        static expression => SyntaxFactory.InvocationExpression(
+                            SyntaxFactory.MemberAccessExpression(
+                                SyntaxKind.SimpleMemberAccessExpression,
+                                SyntaxFactory.IdentifierName("global::System.IO.WindowsRuntimeStreamExtensions"),
+                                SyntaxFactory.IdentifierName("AsRandomAccessStream")),
+                            SyntaxFactory.ArgumentList(
+                                SyntaxFactory.SingletonSeparatedList(
+                                    SyntaxFactory.Argument(
+                                        SyntaxFactory.ParenthesizedExpression(expression))))),
+                        static expression => SyntaxFactory.InvocationExpression(
+                            SyntaxFactory.MemberAccessExpression(
+                                SyntaxKind.SimpleMemberAccessExpression,
+                                SyntaxFactory.IdentifierName("global::System.IO.WindowsRuntimeStreamExtensions"),
+                                SyntaxFactory.IdentifierName("AsStream")),
+                            SyntaxFactory.ArgumentList(
+                                SyntaxFactory.SingletonSeparatedList(
+                                    SyntaxFactory.Argument(
+                                        SyntaxFactory.ParenthesizedExpression(expression))))));
                 }
 
                 if (compilation.GetAccessibleTypeWithMetadataName("Windows.Storage.Streams.IOutputStream", out INamedTypeSymbol? outputStream))
@@ -154,8 +474,24 @@ namespace WinRTWrapper.SourceGenerators
                     yield return new MarshalType(
                         stream,
                         outputStream,
-                        static inner => $"global::System.IO.WindowsRuntimeStreamExtensions.AsOutputStream({inner})",
-                        static inner => $"global::System.IO.WindowsRuntimeStreamExtensions.AsStreamForWrite({inner})");
+                        static expression => SyntaxFactory.InvocationExpression(
+                            SyntaxFactory.MemberAccessExpression(
+                                SyntaxKind.SimpleMemberAccessExpression,
+                                SyntaxFactory.IdentifierName("global::System.IO.WindowsRuntimeStreamExtensions"),
+                                SyntaxFactory.IdentifierName("AsOutputStream")),
+                            SyntaxFactory.ArgumentList(
+                                SyntaxFactory.SingletonSeparatedList(
+                                    SyntaxFactory.Argument(
+                                        SyntaxFactory.ParenthesizedExpression(expression))))),
+                        static expression => SyntaxFactory.InvocationExpression(
+                            SyntaxFactory.MemberAccessExpression(
+                                SyntaxKind.SimpleMemberAccessExpression,
+                                SyntaxFactory.IdentifierName("global::System.IO.WindowsRuntimeStreamExtensions"),
+                                SyntaxFactory.IdentifierName("AsStreamForWrite")),
+                            SyntaxFactory.ArgumentList(
+                                SyntaxFactory.SingletonSeparatedList(
+                                    SyntaxFactory.Argument(
+                                        SyntaxFactory.ParenthesizedExpression(expression))))));
                 }
 
                 if (compilation.GetAccessibleTypeWithMetadataName("Windows.Storage.Streams.IInputStream", out INamedTypeSymbol? inputStream))
@@ -163,32 +499,116 @@ namespace WinRTWrapper.SourceGenerators
                     yield return new MarshalType(
                         stream,
                         inputStream,
-                        static inner => $"global::System.IO.WindowsRuntimeStreamExtensions.AsInputStream({inner})",
-                        static inner => $"global::System.IO.WindowsRuntimeStreamExtensions.AsStreamForRead({inner})");
+                        static expression => SyntaxFactory.InvocationExpression(
+                            SyntaxFactory.MemberAccessExpression(
+                                SyntaxKind.SimpleMemberAccessExpression,
+                                SyntaxFactory.IdentifierName("global::System.IO.WindowsRuntimeStreamExtensions"),
+                                SyntaxFactory.IdentifierName("AsInputStream")),
+                            SyntaxFactory.ArgumentList(
+                                SyntaxFactory.SingletonSeparatedList(
+                                    SyntaxFactory.Argument(
+                                        SyntaxFactory.ParenthesizedExpression(expression))))),
+                        static expression => SyntaxFactory.InvocationExpression(
+                            SyntaxFactory.MemberAccessExpression(
+                                SyntaxKind.SimpleMemberAccessExpression,
+                                SyntaxFactory.IdentifierName("global::System.IO.WindowsRuntimeStreamExtensions"),
+                                SyntaxFactory.IdentifierName("AsStreamForRead")),
+                            SyntaxFactory.ArgumentList(
+                                SyntaxFactory.SingletonSeparatedList(
+                                    SyntaxFactory.Argument(
+                                        SyntaxFactory.ParenthesizedExpression(expression))))));
                 }
             }
 
-            if (compilation.GetAccessibleTypeWithMetadataName("System.Drawing.PointF", out INamedTypeSymbol? point))
+            if (compilation.GetAccessibleTypeWithMetadataName("System.Drawing.PointF", out INamedTypeSymbol? pointF))
             {
-                if (compilation.GetAccessibleTypeWithMetadataName("Windows.Foundation.Point", out INamedTypeSymbol? _point))
+                if (compilation.GetAccessibleTypeWithMetadataName("Windows.Foundation.Point", out INamedTypeSymbol? point))
                 {
                     yield return new MarshalType(
+                        pointF,
                         point,
-                        _point,
-                        static inner => $"new global::Windows.Foundation.Point(({inner}).X, ({inner}).Y)",
-                        static inner => $"new global::System.Drawing.PointF((float)({inner}).X, (float)({inner}).Y)");
+                        static expression => SyntaxFactory.ObjectCreationExpression(
+                            SyntaxFactory.IdentifierName("global::Windows.Foundation.Point"),
+                            SyntaxFactory.ArgumentList(
+                                SyntaxFactory.SeparatedList([
+                                    SyntaxFactory.Argument(
+                                        SyntaxFactory.MemberAccessExpression(
+                                            SyntaxKind.SimpleMemberAccessExpression,
+                                            SyntaxFactory.ParenthesizedExpression(expression),
+                                            SyntaxFactory.IdentifierName("X"))),
+                                    SyntaxFactory.Argument(
+                                        SyntaxFactory.MemberAccessExpression(
+                                            SyntaxKind.SimpleMemberAccessExpression,
+                                            SyntaxFactory.ParenthesizedExpression(expression),
+                                            SyntaxFactory.IdentifierName("Y")))])),
+                            default),
+                        static expression => SyntaxFactory.ObjectCreationExpression(
+                            SyntaxFactory.IdentifierName("global::System.Drawing.PointF"),
+                            SyntaxFactory.ArgumentList(
+                                SyntaxFactory.SeparatedList([
+                                    SyntaxFactory.Argument(
+                                        SyntaxFactory.CastExpression(
+                                            SyntaxFactory.PredefinedType(
+                                                SyntaxFactory.Token(SyntaxKind.FloatKeyword)),
+                                            SyntaxFactory.MemberAccessExpression(
+                                                SyntaxKind.SimpleMemberAccessExpression,
+                                                SyntaxFactory.ParenthesizedExpression(expression),
+                                                SyntaxFactory.IdentifierName("X")))),
+                                    SyntaxFactory.Argument(
+                                        SyntaxFactory.CastExpression(
+                                            SyntaxFactory.PredefinedType(
+                                                SyntaxFactory.Token(SyntaxKind.FloatKeyword)),
+                                            SyntaxFactory.MemberAccessExpression(
+                                                SyntaxKind.SimpleMemberAccessExpression,
+                                                SyntaxFactory.ParenthesizedExpression(expression),
+                                                SyntaxFactory.IdentifierName("Y"))))])),
+                            default));
                 }
             }
 
-            if (compilation.GetAccessibleTypeWithMetadataName("System.Drawing.SizeF", out INamedTypeSymbol? size))
+            if (compilation.GetAccessibleTypeWithMetadataName("System.Drawing.SizeF", out INamedTypeSymbol? sizeF))
             {
-                if (compilation.GetAccessibleTypeWithMetadataName("Windows.Foundation.Size", out INamedTypeSymbol? _size))
+                if (compilation.GetAccessibleTypeWithMetadataName("Windows.Foundation.Size", out INamedTypeSymbol? size))
                 {
                     yield return new MarshalType(
+                        sizeF,
                         size,
-                        _size,
-                        static inner => $"new global::Windows.Foundation.Size(({inner}).Width, ({inner}).Height)",
-                        static inner => $"new global::System.Drawing.SizeF((float)({inner}).Width, (float)({inner}).Height)");
+                        static expression => SyntaxFactory.ObjectCreationExpression(
+                            SyntaxFactory.IdentifierName("global::Windows.Foundation.Size"),
+                            SyntaxFactory.ArgumentList(
+                                SyntaxFactory.SeparatedList([
+                                    SyntaxFactory.Argument(
+                                        SyntaxFactory.MemberAccessExpression(
+                                            SyntaxKind.SimpleMemberAccessExpression,
+                                            SyntaxFactory.ParenthesizedExpression(expression),
+                                            SyntaxFactory.IdentifierName("Width"))),
+                                    SyntaxFactory.Argument(
+                                        SyntaxFactory.MemberAccessExpression(
+                                            SyntaxKind.SimpleMemberAccessExpression,
+                                            SyntaxFactory.ParenthesizedExpression(expression),
+                                            SyntaxFactory.IdentifierName("Height")))])),
+                            default),
+                        static expression => SyntaxFactory.ObjectCreationExpression(
+                            SyntaxFactory.IdentifierName("global::System.Drawing.SizeF"),
+                            SyntaxFactory.ArgumentList(
+                                SyntaxFactory.SeparatedList([
+                                    SyntaxFactory.Argument(
+                                        SyntaxFactory.CastExpression(
+                                            SyntaxFactory.PredefinedType(
+                                                SyntaxFactory.Token(SyntaxKind.FloatKeyword)),
+                                            SyntaxFactory.MemberAccessExpression(
+                                                SyntaxKind.SimpleMemberAccessExpression,
+                                                SyntaxFactory.ParenthesizedExpression(expression),
+                                                SyntaxFactory.IdentifierName("Width")))),
+                                    SyntaxFactory.Argument(
+                                        SyntaxFactory.CastExpression(
+                                            SyntaxFactory.PredefinedType(
+                                                SyntaxFactory.Token(SyntaxKind.FloatKeyword)),
+                                            SyntaxFactory.MemberAccessExpression(
+                                                SyntaxKind.SimpleMemberAccessExpression,
+                                                SyntaxFactory.ParenthesizedExpression(expression),
+                                                SyntaxFactory.IdentifierName("Height"))))])),
+                            default));
                 }
             }
 
@@ -199,8 +619,68 @@ namespace WinRTWrapper.SourceGenerators
                     yield return new MarshalType(
                         rectangle,
                         rect,
-                        static inner => $"new global::Windows.Foundation.Rect(({inner}).X, ({inner}).Y, ({inner}).Width, ({inner}).Height)",
-                        static inner => $"new global::System.Drawing.RectangleF((float)({inner}).X, (float)({inner}).Y, (float)({inner}).Width, (float)({inner}).Height)");
+                        static expression => SyntaxFactory.ObjectCreationExpression(
+                            SyntaxFactory.IdentifierName("global::Windows.Foundation.Rect"),
+                            SyntaxFactory.ArgumentList(
+                                SyntaxFactory.SeparatedList([
+                                    SyntaxFactory.Argument(
+                                        SyntaxFactory.MemberAccessExpression(
+                                            SyntaxKind.SimpleMemberAccessExpression,
+                                            SyntaxFactory.ParenthesizedExpression(expression),
+                                            SyntaxFactory.IdentifierName("X"))),
+                                    SyntaxFactory.Argument(
+                                        SyntaxFactory.MemberAccessExpression(
+                                            SyntaxKind.SimpleMemberAccessExpression,
+                                            SyntaxFactory.ParenthesizedExpression(expression),
+                                            SyntaxFactory.IdentifierName("Y"))),
+                                    SyntaxFactory.Argument(
+                                        SyntaxFactory.MemberAccessExpression(
+                                            SyntaxKind.SimpleMemberAccessExpression,
+                                            SyntaxFactory.ParenthesizedExpression(expression),
+                                            SyntaxFactory.IdentifierName("Width"))),
+                                    SyntaxFactory.Argument(
+                                        SyntaxFactory.MemberAccessExpression(
+                                            SyntaxKind.SimpleMemberAccessExpression,
+                                            SyntaxFactory.ParenthesizedExpression(expression),
+                                            SyntaxFactory.IdentifierName("Height")))])),
+                            default),
+                        static expression => SyntaxFactory.ObjectCreationExpression(
+                            SyntaxFactory.IdentifierName("global::System.Drawing.RectangleF"),
+                            SyntaxFactory.ArgumentList(
+                                SyntaxFactory.SeparatedList([
+                                    SyntaxFactory.Argument(
+                                        SyntaxFactory.CastExpression(
+                                            SyntaxFactory.PredefinedType(
+                                                SyntaxFactory.Token(SyntaxKind.FloatKeyword)),
+                                            SyntaxFactory.MemberAccessExpression(
+                                                SyntaxKind.SimpleMemberAccessExpression,
+                                                SyntaxFactory.ParenthesizedExpression(expression),
+                                                SyntaxFactory.IdentifierName("X")))),
+                                    SyntaxFactory.Argument(
+                                        SyntaxFactory.CastExpression(
+                                            SyntaxFactory.PredefinedType(
+                                                SyntaxFactory.Token(SyntaxKind.FloatKeyword)),
+                                            SyntaxFactory.MemberAccessExpression(
+                                                SyntaxKind.SimpleMemberAccessExpression,
+                                                SyntaxFactory.ParenthesizedExpression(expression),
+                                                SyntaxFactory.IdentifierName("Y")))),
+                                    SyntaxFactory.Argument(
+                                        SyntaxFactory.CastExpression(
+                                            SyntaxFactory.PredefinedType(
+                                                SyntaxFactory.Token(SyntaxKind.FloatKeyword)),
+                                            SyntaxFactory.MemberAccessExpression(
+                                                SyntaxKind.SimpleMemberAccessExpression,
+                                                SyntaxFactory.ParenthesizedExpression(expression),
+                                                SyntaxFactory.IdentifierName("Width")))),
+                                    SyntaxFactory.Argument(
+                                        SyntaxFactory.CastExpression(
+                                            SyntaxFactory.PredefinedType(
+                                                SyntaxFactory.Token(SyntaxKind.FloatKeyword)),
+                                            SyntaxFactory.MemberAccessExpression(
+                                                SyntaxKind.SimpleMemberAccessExpression,
+                                                SyntaxFactory.ParenthesizedExpression(expression),
+                                                SyntaxFactory.IdentifierName("Height"))))])),
+                            default));
                 }
             }
         }

@@ -1,35 +1,59 @@
 ﻿using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Immutable;
 using System.Linq;
-using System.Text;
 
 namespace WinRTWrapper.SourceGenerators.Models
 {
     /// <summary>
     /// Represents a function that converts a string representation of a managed type to a string representation of a wrapper type, and vice versa.
     /// </summary>
-    /// <param name="inner">The input string to be converted.</param>
+    /// <param name="expression">The input string to be converted.</param>
     /// <returns>The converted string representation of the wrapper type.</returns>
-    internal delegate string MarshalConversionFunction(string inner);
+    internal delegate ExpressionSyntax MarshalConversionFunction(ExpressionSyntax expression);
+
+    /// <summary>
+    /// Represents a function that converts a string representation of a managed type to a string representation of a wrapper type, and vice versa, with generic type arguments.
+    /// </summary>
+    /// <param name="expression">The input string to be converted.</param>
+    /// <param name="typeArgs">The generic type arguments to be used in the conversion.</param>
+    /// <returns>The converted string representation of the wrapper type.</returns>
+    internal delegate ExpressionSyntax MarshalGenericConversionFunction(ExpressionSyntax expression, params ImmutableArray<ITypeSymbol> typeArgs);
 
     /// <summary>
     /// Represents a function that converts a string representation of a managed type to a string representation of a wrapper type, and vice versa, with additional arguments.
     /// </summary>
-    /// <param name="inner">The input function that takes an array of strings and returns a string representation of the wrapper type.</param>
+    /// <param name="expression">The input function that takes an array of strings and returns a string representation of the wrapper type.</param>
     /// <param name="args">The additional arguments to be used in the conversion.</param>
     /// <returns>The converted string representation of the wrapper type.</returns>
-    internal delegate string MarshalConversionInWithArgsFunction(Func<ImmutableArray<IParameterSymbol>, string> inner, params ImmutableArray<IParameterSymbol> args);
+    internal delegate ExpressionSyntax MarshalConversionInWithArgsFunction(Func<ImmutableArray<IParameterSymbol>, ExpressionSyntax> expression, params ImmutableArray<IParameterSymbol> args);
 
     /// <summary>
     /// Represents a function that converts a string representation of a wrapper type to a string representation of a managed type, with additional arguments.
     /// </summary>
-    /// <param name="inner">The input string to be converted.</param>
+    /// <param name="expression">The input string to be converted.</param>
     /// <param name="args">The additional arguments to be used in the conversion.</param>
     /// <returns>The converted string representation of the wrapper type.</returns>
-    internal delegate string MarshalConversionOutWithArgsFunction(string inner, params ImmutableArray<IParameterSymbol> args);
+    internal delegate ExpressionSyntax MarshalConversionOutWithArgsFunction(ExpressionSyntax expression, params ImmutableArray<IParameterSymbol> args);
+
+    /// <summary>
+    /// Represents a function that converts a string representation of a managed type to a string representation of a wrapper type, and vice versa, with additional arguments and generic type arguments.
+    /// </summary>
+    /// <param name="expression">The input function that takes an array of strings and returns a string representation of the wrapper type.</param>
+    /// <param name="args">The additional arguments to be used in the conversion.</param>
+    /// <param name="typeArgs">The generic type arguments to be used in the conversion.</param>
+    /// <returns>The converted string representation of the wrapper type.</returns>
+    internal delegate ExpressionSyntax MarshalGenericConversionInWithArgsFunction(Func<ImmutableArray<IParameterSymbol>, ExpressionSyntax> expression, ImmutableArray<IParameterSymbol> args, params ImmutableArray<ITypeSymbol> typeArgs);
+
+    /// <summary>
+    /// Represents a function that converts a string representation of a wrapper type to a string representation of a managed type, with additional arguments and generic type arguments.
+    /// </summary>
+    /// <param name="expression">The input string to be converted.</param>
+    /// <param name="args">The additional arguments to be used in the conversion.</param>
+    /// <param name="typeArgs">The generic type arguments to be used in the conversion.</param>
+    /// <returns>The converted string representation of the wrapper type.</returns>
+    internal delegate ExpressionSyntax MarshalGenericConversionOutWithArgsFunction(ExpressionSyntax expression, ImmutableArray<IParameterSymbol> args, params ImmutableArray<ITypeSymbol> typeArgs);
 
     /// <summary>
     /// Represents a type used for marshaling between managed and wrapper types, including conversion functions for
@@ -61,15 +85,15 @@ namespace WinRTWrapper.SourceGenerators.Models
         /// <summary>
         /// Provides a fallback mechanism for converting the input string.
         /// </summary>
-        /// <param name="input">The input string to be processed.</param>
+        /// <param name="expression">The input string to be processed.</param>
         /// <returns>The original input string without any modifications.</returns>
-        private static string FallbackConvert(string input) => input;
+        private static ExpressionSyntax FallbackConvert(ExpressionSyntax expression) => expression;
 
         /// <inheritdoc/>
-        ExpressionSyntax IMarshalType.ConvertToWrapper(ExpressionSyntax expression) => SyntaxFactory.ParseExpression(ConvertToWrapper(expression.GetText(Encoding.UTF8).ToString()));
+        ExpressionSyntax IMarshalType.ConvertToWrapper(ExpressionSyntax expression) => ConvertToWrapper(expression);
 
         /// <inheritdoc/>
-        ExpressionSyntax IMarshalType.ConvertToManaged(ExpressionSyntax expression) => SyntaxFactory.ParseExpression(ConvertToManaged(expression.GetText(Encoding.UTF8).ToString()));
+        ExpressionSyntax IMarshalType.ConvertToManaged(ExpressionSyntax expression) => ConvertToManaged(expression);
     }
 
     /// <summary>
@@ -80,7 +104,7 @@ namespace WinRTWrapper.SourceGenerators.Models
     /// <param name="ConvertToWrapper">The function that converts a managed type representation to its wrapper type equivalent.</param>
     /// <param name="ConvertToManaged">The function that converts a wrapper type representation back to its managed type equivalent.</param>
     /// <param name="TypeArguments">The generic arguments used in the type.</param>
-    internal record MarshalGenericType(ITypeSymbol ManagedType, ITypeSymbol WrapperType, MarshalConversionFunction ConvertToWrapper, MarshalConversionFunction ConvertToManaged, ImmutableArray<ITypeSymbol> TypeArguments) : IMarshalGenericType
+    internal record MarshalGenericType(ITypeSymbol ManagedType, ITypeSymbol WrapperType, MarshalGenericConversionFunction ConvertToWrapper, MarshalGenericConversionFunction ConvertToManaged, ImmutableArray<ITypeSymbol> TypeArguments) : IMarshalGenericType
     {
         /// <inheritdoc/>
         public string ManagedTypeName => $"{ManagedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat.WithGenericsOptions(SymbolDisplayGenericsOptions.None))}<{string.Join(", ", TypeArguments.Select(x => x.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)))}>";
@@ -92,10 +116,10 @@ namespace WinRTWrapper.SourceGenerators.Models
         public bool HasConversion { get; init; } = true;
 
         /// <inheritdoc/>
-        ExpressionSyntax IMarshalType.ConvertToWrapper(ExpressionSyntax expression) => SyntaxFactory.ParseExpression(ConvertToWrapper(expression.GetText(Encoding.UTF8).ToString()));
+        ExpressionSyntax IMarshalType.ConvertToWrapper(ExpressionSyntax expression) => ConvertToWrapper(expression, TypeArguments);
 
         /// <inheritdoc/>
-        ExpressionSyntax IMarshalType.ConvertToManaged(ExpressionSyntax expression) => SyntaxFactory.ParseExpression(ConvertToManaged(expression.GetText(Encoding.UTF8).ToString()));
+        ExpressionSyntax IMarshalType.ConvertToManaged(ExpressionSyntax expression) => ConvertToManaged(expression, TypeArguments);
 
         /// <inheritdoc/>
         IMarshalGenericType IMarshalGenericType.WithTypeArguments(ImmutableArray<ITypeSymbol> arguments) => this with { TypeArguments = arguments };
@@ -116,11 +140,11 @@ namespace WinRTWrapper.SourceGenerators.Models
     {
         /// <inheritdoc/>
         ExpressionSyntax IMarshalTypeWithArgs.ConvertToWrapperWithArgs(Func<ImmutableArray<IParameterSymbol>, ExpressionSyntax> expression, params ImmutableArray<IParameterSymbol> args) =>
-            SyntaxFactory.ParseExpression(ConvertToWrapperWithArgs((s) => expression(s).GetText(Encoding.UTF8).ToString(), args));
+            ConvertToWrapperWithArgs(expression, args);
 
         /// <inheritdoc/>
         ExpressionSyntax IMarshalTypeWithArgs.ConvertToManagedWithArgs(ExpressionSyntax expression, params ImmutableArray<IParameterSymbol> args) =>
-            SyntaxFactory.ParseExpression(ConvertToManagedWithArgs(expression.GetText(Encoding.UTF8).ToString(), args));
+            ConvertToManagedWithArgs(expression, args);
     }
 
     /// <summary>
@@ -134,15 +158,15 @@ namespace WinRTWrapper.SourceGenerators.Models
     /// <param name="ConvertToManagedWithArgs">The function that converts a wrapper type representation back to its managed type equivalent, with additional arguments.</param>
     /// <param name="TypeArguments">The generic arguments used in the type.</param>
     /// <param name="Arguments">The additional arguments used in the type.</param>
-    internal sealed record MarshalGenericTypeWithArgs(ITypeSymbol ManagedType, ITypeSymbol WrapperType, MarshalConversionFunction ConvertToWrapper, MarshalConversionFunction ConvertToManaged, MarshalConversionInWithArgsFunction ConvertToWrapperWithArgs, MarshalConversionOutWithArgsFunction ConvertToManagedWithArgs, ImmutableArray<ITypeSymbol> TypeArguments, params ImmutableArray<ITypeSymbol> Arguments) : MarshalGenericType(ManagedType, WrapperType, ConvertToWrapper, ConvertToManaged, TypeArguments), IMarshalGenericTypeWithArgs
+    internal sealed record MarshalGenericTypeWithArgs(ITypeSymbol ManagedType, ITypeSymbol WrapperType, MarshalGenericConversionFunction ConvertToWrapper, MarshalGenericConversionFunction ConvertToManaged, MarshalGenericConversionInWithArgsFunction ConvertToWrapperWithArgs, MarshalGenericConversionOutWithArgsFunction ConvertToManagedWithArgs, ImmutableArray<ITypeSymbol> TypeArguments, params ImmutableArray<ITypeSymbol> Arguments) : MarshalGenericType(ManagedType, WrapperType, ConvertToWrapper, ConvertToManaged, TypeArguments), IMarshalGenericTypeWithArgs
     {
         /// <inheritdoc/>
         ExpressionSyntax IMarshalTypeWithArgs.ConvertToWrapperWithArgs(Func<ImmutableArray<IParameterSymbol>, ExpressionSyntax> expression, params ImmutableArray<IParameterSymbol> args) =>
-            SyntaxFactory.ParseExpression(ConvertToWrapperWithArgs((s) => expression(s).GetText(Encoding.UTF8).ToString(), args));
+            ConvertToWrapperWithArgs(expression, args, TypeArguments);
 
         /// <inheritdoc/>
         ExpressionSyntax IMarshalTypeWithArgs.ConvertToManagedWithArgs(ExpressionSyntax expression, params ImmutableArray<IParameterSymbol> args) =>
-            SyntaxFactory.ParseExpression(ConvertToManagedWithArgs(expression.GetText(Encoding.UTF8).ToString(), args));
+            ConvertToManagedWithArgs(expression, args, TypeArguments);
     }
 
     /// <summary>
