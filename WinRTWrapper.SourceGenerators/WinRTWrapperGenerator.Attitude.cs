@@ -72,7 +72,11 @@ namespace WinRTWrapper.SourceGenerators
                     /// </summary>
                     /// <param name="target">The type that this wrapper is targeting.</param>
                     public GenerateWinRTWrapperAttribute(global::System.Type target)
+            #if NET46_OR_GREATER || NETSTANDARD1_3_OR_GREATER || NETCOREAPP1_0_OR_GREATER || WINDOWS_UWP
                         : this(target, global::WinRTWrapper.CodeAnalysis.GenerateMember.All, global::System.Array.Empty<global::System.Type>())
+            #else
+                        : this(target, global::WinRTWrapper.CodeAnalysis.GenerateMember.All, new global::System.Type[0])
+            #endif
                     { }
 
                     /// <summary>
@@ -81,7 +85,11 @@ namespace WinRTWrapper.SourceGenerators
                     /// <param name="target">The type that this wrapper is targeting.</param>
                     /// <param name="member">The type of members to generate in the WinRT wrapper.</param>
                     public GenerateWinRTWrapperAttribute(global::System.Type target, global::WinRTWrapper.CodeAnalysis.GenerateMember member)
+            #if NET46_OR_GREATER || NETSTANDARD1_3_OR_GREATER || NETCOREAPP1_0_OR_GREATER || WINDOWS_UWP
                         : this(target, member, global::System.Array.Empty<global::System.Type>())
+            #else
+                        : this(target, member, new global::System.Type[0])
+            #endif
                     { }
 
                     /// <summary>

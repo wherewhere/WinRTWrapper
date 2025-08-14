@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Windows.Foundation;
@@ -597,7 +596,7 @@ namespace WinRTWrapper.Test
     /// <summary>
     /// Class <see cref="SimpleSub"/> inherits from <see cref="SimpleBase"/> and overrides the virtual method.
     /// </summary>
-    internal class SimpleSub : SimpleBase
+    internal partial class SimpleSub : SimpleBase
     {
         /// <inheritdoc/>
         public override void VirtualMethod() { }

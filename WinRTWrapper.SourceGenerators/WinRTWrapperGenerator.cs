@@ -91,43 +91,64 @@ namespace WinRTWrapper.SourceGenerators
             }
             foreach (ISymbolWrapper member in wrappers)
             {
-                if (options.IsCSWinRT && member.Wrapper is not { ContainingType.TypeKind: not TypeKind.Interface })
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(
-                        new DiagnosticDescriptor(
-                            "WRAPPER001",
-                            "Missing member definition in wrapper class",
-                            "The member '{0}' is not defined in the wrapper class '{1}' which C#/WinRT source generator needs it.",
-                            "Wrapper",
-                            DiagnosticSeverity.Warning,
-                            true,
-                            "C#/WinRT source generator needs member definition to generate something important. It is not necessary on built-in WinRT platform.",
-                            "https://learn.microsoft.com/windows/apps/develop/platform/csharp-winrt/authoring"),
-                        symbol.Locations.FirstOrDefault(),
-                        member.Target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-                        new Dictionary<string, string?>()
-                        {
-                            { "Name", member.Target.Name }
-                        }.ToImmutableDictionary(),
-                        symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
-                }
+                bool success = false;
                 switch (member)
                 {
                     case SymbolWrapper<IMethodSymbol> method:
                         if (AddMethod(method, options.Marshals, ref needConstructor) is BaseMethodDeclarationSyntax methodDeclaration)
                         {
                             members.Add(methodDeclaration);
+                            success = true;
                         }
                         break;
                     case SymbolWrapper<IPropertySymbol> property:
                         if (AddProperty(property, options.Marshals) is BasePropertyDeclarationSyntax propertyDeclaration)
                         {
                             members.Add(propertyDeclaration);
+                            success = true;
                         }
                         break;
                     case SymbolWrapper<IEventSymbol> @event:
-                        members.AddRange(AddEvent(@event, options));
+                        members.AddRange(AddEvent(@event, options.Marshals));
+                        success = true;
                         break;
+                }
+                if (success && options.IsCSWinRT && member.Wrapper is not { ContainingType.TypeKind: not TypeKind.Interface })
+                {
+                    MemberDeclarationSyntax syntax = members[^1];
+                    syntax = syntax switch
+                    {
+                        BaseMethodDeclarationSyntax method =>
+                            method.AddModifiers(SyntaxFactory.Token(SyntaxKind.PartialKeyword))
+                                  .WithBody(null)
+                                  .WithoutLeadingTrivia()
+                                  .NormalizeWhitespace(),
+                        BasePropertyDeclarationSyntax property =>
+                            property.AddModifiers(SyntaxFactory.Token(SyntaxKind.PartialKeyword))
+                                    .WithAccessorList(null)
+                                    .WithoutLeadingTrivia()
+                                    .NormalizeWhitespace(),
+                        _ => syntax.NormalizeWhitespace()
+                    };
+                    context.ReportDiagnostic(
+                        Diagnostic.Create(
+                            new DiagnosticDescriptor(
+                                "WRAPPER001",
+                                "Missing member definition in wrapper class",
+                                "The member '{0}' is not defined in the wrapper class '{1}' which C#/WinRT source generator needs it.",
+                                "Wrapper",
+                                DiagnosticSeverity.Warning,
+                                true,
+                                "C#/WinRT source generator needs member definition to generate something important. It is not necessary on built-in WinRT platform.",
+                                "https://learn.microsoft.com/windows/apps/develop/platform/csharp-winrt/authoring"),
+                            symbol.Locations.FirstOrDefault(),
+                            member.Target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                            new Dictionary<string, string?>()
+                            {
+                                { "Name", member.Target.Name },
+                                { "Definition", syntax.GetText(Encoding.UTF8).ToString() }
+                            }.ToImmutableDictionary(),
+                            symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
                 }
             }
 
@@ -136,10 +157,11 @@ namespace WinRTWrapper.SourceGenerators
                 members.Add(SyntaxFactory.ConstructorDeclaration(symbol.Name)
                     .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.InternalKeyword)))
                     .WithBody(SyntaxFactory.Block())
-                    .WithLeadingTrivia(SyntaxFactory.TriviaList(
-                        SyntaxFactory.Comment("///<summary>"),
-                        SyntaxFactory.Comment($"/// Initializes a new instance of the <see cref=\"{symbol.GetDocumentationCommentId()}\"/> class."),
-                        SyntaxFactory.Comment("///</summary>"))));
+                    .WithLeadingTrivia(
+                        SyntaxFactory.TriviaList(
+                            SyntaxFactory.Comment("///<summary>"),
+                            SyntaxFactory.Comment($"/// Initializes a new instance of the <see cref=\"{symbol.GetDocumentationCommentId()}\"/> class."),
+                            SyntaxFactory.Comment("///</summary>"))));
             }
 
             CompilationUnitSyntax compilationUnitSyntax =
@@ -157,7 +179,10 @@ namespace WinRTWrapper.SourceGenerators
                                         SyntaxFactory.Token(symbol.DeclaredAccessibility switch { Accessibility.Private => SyntaxKind.InternalKeyword, Accessibility.Public => SyntaxKind.PublicKeyword, _ => SyntaxKind.InternalKeyword }),
                                         SyntaxFactory.Token(symbol.IsStatic ? SyntaxKind.StaticKeyword : SyntaxKind.SealedKeyword),
                                         SyntaxFactory.Token(SyntaxKind.PartialKeyword))
-                                    .AddMembers([.. members])))
+                                    .AddMembers([.. members])
+                                    .WithLeadingTrivia(
+                                        SyntaxFactory.TriviaList(
+                                            SyntaxFactory.Comment($"/// <inheritdoc cref=\"{target.GetDocumentationCommentId()}\"/>")))))
                     .NormalizeWhitespace();
 
             context.AddSource($"{symbol.Name}.g.cs", compilationUnitSyntax.GetText(Encoding.UTF8));

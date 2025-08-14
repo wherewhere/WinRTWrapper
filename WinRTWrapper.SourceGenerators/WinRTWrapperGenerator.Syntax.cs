@@ -483,14 +483,14 @@ namespace WinRTWrapper.SourceGenerators
         /// </summary>
         /// <param name="source">The event symbol to process.</param>
         /// <returns>The <see cref="MemberDeclarationSyntax"/> representing the event, or an empty enumerable if the event is not applicable.</returns>
-        private static IEnumerable<MemberDeclarationSyntax> AddEvent(SymbolWrapper<IEventSymbol> source, GenerationOptions options)
+        private static IEnumerable<MemberDeclarationSyntax> AddEvent(SymbolWrapper<IEventSymbol> source, ImmutableArray<IMarshalType> marshals)
         {
             (INamedTypeSymbol symbol, INamedTypeSymbol target, IEventSymbol? wrapper, IEventSymbol @event) = source;
             IMethodSymbol invoke = @event.Type.GetMembers().OfType<IMethodSymbol>().FirstOrDefault(x => x.Name == "Invoke");
-            IMarshalType marshal = GetWrapperType(Enumerable.Unwrap(wrapper?.GetAttributes(), @event.GetAttributes()), options.Marshals, @event.Type, wrapper?.Type, VarianceKind.None);
-            switch (options)
+            IMarshalType marshal = GetWrapperType(Enumerable.Unwrap(wrapper?.GetAttributes(), @event.GetAttributes()), marshals, @event.Type, wrapper?.Type, VarianceKind.None);
+            switch (@event)
             {
-                case { IsWinMDObject: true }:
+                case { IsWindowsRuntimeEvent: true }:
                     yield return SyntaxFactory.FieldDeclaration(
                         default,
                         @event.IsStatic ?

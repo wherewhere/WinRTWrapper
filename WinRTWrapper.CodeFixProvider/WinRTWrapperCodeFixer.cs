@@ -30,40 +30,27 @@ namespace WinRTWrapper.CodeFixes
 
             foreach (Diagnostic diagnostic in context.Diagnostics)
             {
-                if (diagnostic.Properties.TryGetValue("Name", out string? name))
+                if (diagnostic.Properties.TryGetValue("Name", out string? name)
+                    && diagnostic.Properties.TryGetValue("Definition", out string? definition))
                 {
                     context.RegisterCodeFix(
-                    CodeAction.Create(
-                        $"Add {name} member",
-                        ct => MakeTypePartial(context.Document, declaration, diagnostic, ct),
-                        nameof(WinRTWrapperCodeFixer)),
-                    diagnostic);
+                        CodeAction.Create(
+                            $"Add {name} member",
+                            ct => AddMember(context.Document, declaration, definition, ct),
+                            nameof(WinRTWrapperCodeFixer)),
+                        diagnostic);
                 }
             }
         }
 
-        private static async Task<Document> MakeTypePartial(Document document, ClassDeclarationSyntax @class, Diagnostic diagnostic, CancellationToken token)
+        private static async Task<Document> AddMember(Document document, ClassDeclarationSyntax @class, string? definition, CancellationToken token)
         {
-            if (diagnostic.Properties.TryGetValue("Name", out string? name))
+            SyntaxNode? oldRoot = await document.GetSyntaxRootAsync(token).ConfigureAwait(false);
+            if (oldRoot == null) { return document; }
+            if (definition != null && SyntaxFactory.ParseMemberDeclaration(definition) is MemberDeclarationSyntax syntax)
             {
-                SyntaxNode? oldRoot = await document.GetSyntaxRootAsync(token).ConfigureAwait(false);
-                if (oldRoot == null) { return document; }
-
-                ClassDeclarationSyntax newClass = @class.AddMembers(
-                    SyntaxFactory.MethodDeclaration(
-                        default,
-                        SyntaxTokenList.Create([
-                            SyntaxFactory.Token(SyntaxKind.PublicKeyword),
-                        SyntaxFactory.Token(SyntaxKind.PartialKeyword)]),
-                        SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.VoidKeyword)),
-                        default,
-                        SyntaxFactory.Identifier(name!),
-                        default,
-                        SyntaxFactory.ParameterList(),
-                        default, default, default, default));
-
+                ClassDeclarationSyntax newClass = @class.AddMembers(syntax);
                 SyntaxNode newRoot = oldRoot.ReplaceNode(@class, newClass);
-
                 return document.WithSyntaxRoot(newRoot);
             }
             return document;
