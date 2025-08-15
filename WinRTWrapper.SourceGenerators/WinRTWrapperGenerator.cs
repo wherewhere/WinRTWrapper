@@ -4,7 +4,6 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
-using System.Reflection.Metadata;
 using System.Text;
 using System.Threading;
 using WinRTWrapper.SourceGenerators.Extensions;
@@ -71,7 +70,7 @@ namespace WinRTWrapper.SourceGenerators
             (WrapperType? source, GenerationOptions options) = info;
             (INamedTypeSymbol symbol, INamedTypeSymbol target, _, _) = source!;
             List<MemberDeclarationSyntax> members = [];
-            members.AddRange(InitBuilder((symbol, target), !options.IsWinMDObject && !options.IsWinRTComponent));
+            members.AddRange(CreateInitMember((symbol, target), !options.IsWinMDObject && !options.IsWinRTComponent));
             bool? needConstructor = null;
             List<ISymbolWrapper> wrappers = [.. GetMembers(source, options.Marshals)];
             for (int i = wrappers.Count - 1; i >= 0;)
@@ -95,21 +94,21 @@ namespace WinRTWrapper.SourceGenerators
                 switch (member)
                 {
                     case SymbolWrapper<IMethodSymbol> method:
-                        if (AddMethod(method, options.Marshals, ref needConstructor) is BaseMethodDeclarationSyntax methodDeclaration)
+                        if (CreateMethod(method, options.Marshals, ref needConstructor) is BaseMethodDeclarationSyntax methodDeclaration)
                         {
                             members.Add(methodDeclaration);
                             success = true;
                         }
                         break;
                     case SymbolWrapper<IPropertySymbol> property:
-                        if (AddProperty(property, options.Marshals) is BasePropertyDeclarationSyntax propertyDeclaration)
+                        if (CreateProperty(property, options.Marshals) is BasePropertyDeclarationSyntax propertyDeclaration)
                         {
                             members.Add(propertyDeclaration);
                             success = true;
                         }
                         break;
                     case SymbolWrapper<IEventSymbol> @event:
-                        members.AddRange(AddEvent(@event, options.Marshals));
+                        members.AddRange(CreateEvent(@event, options.Marshals));
                         success = true;
                         break;
                 }
@@ -154,9 +153,15 @@ namespace WinRTWrapper.SourceGenerators
 
             if (needConstructor == true)
             {
-                members.Add(SyntaxFactory.ConstructorDeclaration(symbol.Name)
-                    .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.InternalKeyword)))
-                    .WithBody(SyntaxFactory.Block())
+                members.Add(
+                    SyntaxFactory.ConstructorDeclaration(
+                        default,
+                        SyntaxFactory.TokenList(
+                            SyntaxFactory.Token(SyntaxKind.InternalKeyword)),
+                        SyntaxFactory.Identifier(symbol.Name),
+                        SyntaxFactory.ParameterList(),
+                        default,
+                        SyntaxFactory.Block())
                     .WithLeadingTrivia(
                         SyntaxFactory.TriviaList(
                             SyntaxFactory.Comment("///<summary>"),
@@ -164,25 +169,40 @@ namespace WinRTWrapper.SourceGenerators
                             SyntaxFactory.Comment("///</summary>"))));
             }
 
+            SyntaxTokenList tokens = SyntaxFactory.TokenList().AddAccessibility(symbol.DeclaredAccessibility);
+            if (symbol.IsStatic)
+            {
+                tokens = tokens.Add(SyntaxFactory.Token(SyntaxKind.StaticKeyword));
+            }
+            else if (symbol.DeclaredAccessibility == Accessibility.Public
+                && (options.IsWinMDObject || options.IsWinRTComponent))
+            {
+                tokens = tokens.Add(SyntaxFactory.Token(SyntaxKind.SealedKeyword));
+            }
+            tokens = tokens.Add(SyntaxFactory.Token(SyntaxKind.PartialKeyword));
+
             CompilationUnitSyntax compilationUnitSyntax =
                 SyntaxFactory.CompilationUnit()
                     .AddMembers(
-                        SyntaxFactory.NamespaceDeclaration(SyntaxFactory.IdentifierName(symbol.ContainingNamespace.ToDisplayString()))
+                        SyntaxFactory.NamespaceDeclaration(
+                            SyntaxFactory.IdentifierName(
+                                symbol.ContainingNamespace.ToDisplayString()),
+                            default,
+                            default,
+                            SyntaxFactory.SingletonList<MemberDeclarationSyntax>(
+                                SyntaxFactory.ClassDeclaration(
+                                    default, tokens,
+                                    SyntaxFactory.Identifier(symbol.Name),
+                                    default, default, default,
+                                    [.. members])
+                                    .WithLeadingTrivia(
+                                        SyntaxFactory.TriviaList(
+                                            SyntaxFactory.Comment($"/// <inheritdoc cref=\"{target.GetDocumentationCommentId()}\"/>")))))
                             .WithLeadingTrivia(
                                 SyntaxFactory.TriviaList(
                                     SyntaxFactory.Comment("// <auto-generated/>"),
                                     SyntaxFactory.Trivia(SyntaxFactory.PragmaWarningDirectiveTrivia(SyntaxFactory.Token(SyntaxKind.DisableKeyword), true)),
-                                    SyntaxFactory.Comment(" ")))
-                            .AddMembers(
-                                SyntaxFactory.ClassDeclaration(symbol.Name)
-                                    .AddModifiers(
-                                        SyntaxFactory.Token(symbol.DeclaredAccessibility switch { Accessibility.Private => SyntaxKind.InternalKeyword, Accessibility.Public => SyntaxKind.PublicKeyword, _ => SyntaxKind.InternalKeyword }),
-                                        SyntaxFactory.Token(symbol.IsStatic ? SyntaxKind.StaticKeyword : SyntaxKind.SealedKeyword),
-                                        SyntaxFactory.Token(SyntaxKind.PartialKeyword))
-                                    .AddMembers([.. members])
-                                    .WithLeadingTrivia(
-                                        SyntaxFactory.TriviaList(
-                                            SyntaxFactory.Comment($"/// <inheritdoc cref=\"{target.GetDocumentationCommentId()}\"/>")))))
+                                    SyntaxFactory.Comment(" "))))
                     .NormalizeWhitespace();
 
             context.AddSource($"{symbol.Name}.g.cs", compilationUnitSyntax.GetText(Encoding.UTF8));
@@ -310,7 +330,7 @@ namespace WinRTWrapper.SourceGenerators
                                         return false;
                                     }
                                 }
-                        }
+                            }
                         }
                         return false;
                     case (IPropertySymbol w, IPropertySymbol t):

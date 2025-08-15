@@ -492,6 +492,15 @@ namespace WinRTWrapper.Test
         private int _field;
 
         /// <summary>
+        /// Initializes a new instance of the <see cref="StructSimple"/> struct with the specified value.
+        /// </summary>
+        /// <param name="simple">The <see cref="Simple"/> instance to initialize the struct with. The value of the instance's property is assigned to the internal field.</param>
+        public StructSimple([WinRTWrapperMarshalUsing(typeof(SimpleWrapper))] Simple simple) : this()
+        {
+            _field = simple.Property;
+        }
+
+        /// <summary>
         /// Gets or sets the value at the specified index.
         /// </summary>
         /// <param name="index">The index of the value to get or set.</param>

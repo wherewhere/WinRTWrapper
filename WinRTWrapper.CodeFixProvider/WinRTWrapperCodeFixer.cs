@@ -33,11 +33,12 @@ namespace WinRTWrapper.CodeFixes
                 if (diagnostic.Properties.TryGetValue("Name", out string? name)
                     && diagnostic.Properties.TryGetValue("Definition", out string? definition))
                 {
+                    string title = $"Add member {name} to {declaration.Identifier.Text}";
                     context.RegisterCodeFix(
                         CodeAction.Create(
-                            $"Add {name} member",
+                            title,
                             ct => AddMember(context.Document, declaration, definition, ct),
-                            nameof(WinRTWrapperCodeFixer)),
+                            title),
                         diagnostic);
                 }
             }

@@ -21,7 +21,7 @@ namespace WinRTWrapper.SourceGenerators
         /// <param name="source">The source wrapper type.</param>
         /// <param name="isPublic">Indicates whether the generated member should be public.</param>
         /// <returns>The <see cref="MemberDeclarationSyntax"/> representing the initialization of the wrapper class.</returns>
-        private static IEnumerable<MemberDeclarationSyntax> InitBuilder((INamedTypeSymbol, INamedTypeSymbol) source, bool isPublic = false)
+        private static IEnumerable<MemberDeclarationSyntax> CreateInitMember((INamedTypeSymbol, INamedTypeSymbol) source, bool isPublic = false)
         {
             StringBuilder builder = new();
             (INamedTypeSymbol symbol, INamedTypeSymbol target) = source;
@@ -44,6 +44,12 @@ namespace WinRTWrapper.SourceGenerators
                             SyntaxFactory.Comment($"/// The target <see cref=\"{target.GetConstructedFromDocumentationCommentId()}\"/> object of the wrapper."),
                             SyntaxFactory.Comment("/// </summary>")));
 
+                bool hasBase = symbol.BaseType?.GetAttributes().Any(x =>
+                    x.AttributeClass is { Name: nameof(GenerateWinRTWrapperAttribute) }
+                    && x.AttributeClass.ContainingNamespace.ToDisplayString() == namespaceName
+                    && x.ConstructorArguments is [{ Kind: TypedConstantKind.Type, Value: INamedTypeSymbol type }, ..]
+                    && target.IsSubclassOf(type)) == true;
+
                 yield return SyntaxFactory.ConstructorDeclaration(
                     default,
                     SyntaxFactory.TokenList(isPublic ? SyntaxFactory.Token(SyntaxKind.PublicKeyword) : SyntaxFactory.Token(SyntaxKind.InternalKeyword)),
@@ -56,7 +62,12 @@ namespace WinRTWrapper.SourceGenerators
                                 SyntaxFactory.IdentifierName(target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
                                 SyntaxFactory.Identifier("target"),
                                 default))),
-                    default,
+                    hasBase ? SyntaxFactory.ConstructorInitializer(
+                        SyntaxKind.BaseConstructorInitializer,
+                        SyntaxFactory.ArgumentList(
+                            SyntaxFactory.SingletonSeparatedList(
+                                SyntaxFactory.Argument(
+                                    SyntaxFactory.IdentifierName("target"))))) : default,
                     SyntaxFactory.Block(
                         SyntaxFactory.SingletonList<StatementSyntax>(
                             SyntaxFactory.ExpressionStatement(
@@ -159,62 +170,97 @@ namespace WinRTWrapper.SourceGenerators
         /// </summary>
         /// <param name="source">The method symbol to process.</param>
         /// <returns>The <see cref="BaseMethodDeclarationSyntax?"/> representing the method.</returns>
-        private static BaseMethodDeclarationSyntax? AddMethod(SymbolWrapper<IMethodSymbol> source, ImmutableArray<IMarshalType> marshals, ref bool? needConstructor)
+        private static BaseMethodDeclarationSyntax? CreateMethod(SymbolWrapper<IMethodSymbol> source, ImmutableArray<IMarshalType> marshals, ref bool? needConstructor)
         {
             (INamedTypeSymbol symbol, INamedTypeSymbol target, IMethodSymbol? wrapper, IMethodSymbol method) = source;
+            static bool CheckArgs(ImmutableArray<ITypeSymbol> arguments, ImmutableArray<IParameterSymbol> parameters)
+            {
+                if (parameters.Length >= arguments.Length)
+                {
+                    for (int i = 1; i <= arguments.Length; i++)
+                    {
+                        ITypeSymbol argument = arguments[^i];
+                        IParameterSymbol parameter = parameters[^i];
+                        if (!parameter.Type.IsSubclassOf(argument))
+                        {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+                return false;
+            }
             switch (method)
             {
                 case { MethodKind: MethodKind.Constructor }:
-                    if (method.Parameters.Length == 0)
                     {
-                        needConstructor = false;
+                        if (method.Parameters.Length == 0)
+                        {
+                            needConstructor = false;
+                        }
+                        else
+                        {
+                            needConstructor ??= true;
+                        }
+                        ImmutableArray<(IMarshalType marshal, string name)> parameters = [.. GetParameters(source)];
+                        IEnumerable<(IMarshalType marshal, string name)> GetParameters(SymbolWrapper<IMethodSymbol> source)
+                        {
+                            (IMethodSymbol? wrapper, IMethodSymbol target) = source;
+                            if (wrapper == null)
+                            {
+                                return method.Parameters.Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type, null, VarianceKind.In), x.Name));
+                            }
+                            else
+                            {
+                                IEnumerable<(IMarshalType marshal, string name)> GetParameters(IMethodSymbol wrapper, IMethodSymbol target)
+                                {
+                                    for (int i = 0; i < wrapper.Parameters.Length; i++)
+                                    {
+                                        IParameterSymbol wrapperParam = wrapper.Parameters[i];
+                                        IParameterSymbol targetParam = target.Parameters[i];
+                                        yield return (GetWrapperType(Enumerable.Unwrap(wrapperParam.GetAttributes(), targetParam.GetAttributes()), marshals, targetParam.Type, wrapperParam.Type, VarianceKind.In), wrapperParam.Name);
+                                    }
+                                }
+                                return GetParameters(wrapper, target);
+                            }
+                        }
+                        return SyntaxFactory.ConstructorDeclaration(
+                            default,
+                            SyntaxFactory.TokenList(source.GetMemberModify()),
+                            SyntaxFactory.Identifier(symbol.Name),
+                            SyntaxFactory.ParameterList(
+                                SyntaxFactory.SeparatedList(
+                                    parameters.Select(x =>
+                                        SyntaxFactory.Parameter(
+                                            SyntaxFactory.Identifier(x.name))
+                                            .WithType(
+                                                SyntaxFactory.IdentifierName(
+                                                    x.marshal.WrapperTypeName))))),
+                            SyntaxFactory.ConstructorInitializer(
+                                SyntaxKind.ThisConstructorInitializer,
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            default,
+                                            default,
+                                            SyntaxFactory.ObjectCreationExpression(
+                                                SyntaxFactory.IdentifierName(target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                                SyntaxFactory.ArgumentList(
+                                                    SyntaxFactory.SeparatedList(
+                                                        parameters.Select(x =>
+                                                            SyntaxFactory.Argument(
+                                                                x.marshal.ConvertToManaged(SyntaxFactory.IdentifierName(x.name)))))),
+                                                default))))),
+                            SyntaxFactory.Block())
+                            .WithLeadingTrivia(
+                                SyntaxFactory.TriviaList(
+                                    SyntaxFactory.Comment($"/// <inheritdoc cref=\"{method.GetConstructedFromDocumentationCommentId()}\"/>")));
                     }
-                    else
-                    {
-                        needConstructor ??= true;
-                    }
-                    return SyntaxFactory.ConstructorDeclaration(
-                        default,
-                        SyntaxFactory.TokenList(source.GetMemberModify()),
-                        SyntaxFactory.Identifier(symbol.Name),
-                        SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(method.Parameters.Select(x => SyntaxFactory.Parameter(SyntaxFactory.Identifier(x.Name)).WithType(SyntaxFactory.IdentifierName(x.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)))))),
-                        SyntaxFactory.ConstructorInitializer(
-                            SyntaxKind.ThisConstructorInitializer,
-                            SyntaxFactory.ArgumentList(
-                                SyntaxFactory.SingletonSeparatedList(
-                                    SyntaxFactory.Argument(
-                                        default,
-                                        default,
-                                        SyntaxFactory.ObjectCreationExpression(
-                                            SyntaxFactory.IdentifierName(target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
-                                            SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(method.Parameters.Select(x => SyntaxFactory.Argument(SyntaxFactory.IdentifierName(x.Name))))),
-                                            default))))),
-                        SyntaxFactory.Block())
-                        .WithLeadingTrivia(
-                            SyntaxFactory.TriviaList(
-                                SyntaxFactory.Comment($"/// <inheritdoc cref=\"{method.GetConstructedFromDocumentationCommentId()}\"/>")));
                 case { MethodKind: MethodKind.Ordinary }:
                     IMarshalType returnType = GetWrapperType(Enumerable.Unwrap(wrapper?.GetReturnTypeAttributes(), method.GetReturnTypeAttributes()), marshals, method.ReturnType, wrapper?.ReturnType, VarianceKind.Out);
-                    static bool CheckArgs(ImmutableArray<ITypeSymbol> arguments, ImmutableArray<IParameterSymbol> parameters)
-                    {
-                        if (parameters.Length >= arguments.Length)
-                        {
-                            for (int i = 1; i <= arguments.Length; i++)
-                            {
-                                ITypeSymbol argument = arguments[^i];
-                                IParameterSymbol parameter = parameters[^i];
-                                if (!parameter.Type.IsSubclassOf(argument))
-                                {
-                                    return false;
-                                }
-                            }
-                            return true;
-                        }
-                        return false;
-                    }
                     if (returnType is IMarshalTypeWithArgs { Arguments: { Length: > 0 } arguments } returnWithArgs && CheckArgs(arguments, method.Parameters))
                     {
-                        IEnumerable<(IMarshalType marshal, string name)> parameters = GetParameters(source);
+                        ImmutableArray<(IMarshalType marshal, string name)> parameters = [.. GetParameters(source)];
                         IEnumerable<(IMarshalType marshal, string name)> GetParameters(SymbolWrapper<IMethodSymbol> source)
                         {
                             (IMethodSymbol? wrapper, IMethodSymbol target) = source;
@@ -300,7 +346,7 @@ namespace WinRTWrapper.SourceGenerators
                     }
                     else
                     {
-                        IEnumerable<(IMarshalType marshal, string name)> parameters = GetParameters(source);
+                        ImmutableArray<(IMarshalType marshal, string name)> parameters = [..GetParameters(source)];
                         IEnumerable<(IMarshalType marshal, string name)> GetParameters(SymbolWrapper<IMethodSymbol> source)
                         {
                             (IMethodSymbol? wrapper, IMethodSymbol target) = source;
@@ -340,7 +386,14 @@ namespace WinRTWrapper.SourceGenerators
                             default,
                             SyntaxFactory.Identifier(method.Name),
                             default,
-                            SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters.Select(x => SyntaxFactory.Parameter(SyntaxFactory.Identifier(x.name)).WithType(SyntaxFactory.IdentifierName(x.marshal.WrapperTypeName))))),
+                            SyntaxFactory.ParameterList(
+                                SyntaxFactory.SeparatedList(
+                                    parameters.Select(x =>
+                                        SyntaxFactory.Parameter(
+                                            SyntaxFactory.Identifier(x.name))
+                                            .WithType(
+                                                SyntaxFactory.IdentifierName(
+                                                    x.marshal.WrapperTypeName))))),
                             default,
                             SyntaxFactory.Block(
                                 SyntaxFactory.SingletonList<StatementSyntax>(
@@ -362,7 +415,7 @@ namespace WinRTWrapper.SourceGenerators
         /// </summary>
         /// <param name="source">The property symbol to process.</param>
         /// <returns>The <see cref="BasePropertyDeclarationSyntax?"/> representing the property, or null if the property is write-only or an indexer that does not meet the criteria.</returns>
-        private static BasePropertyDeclarationSyntax? AddProperty(SymbolWrapper<IPropertySymbol> source, ImmutableArray<IMarshalType> marshals)
+        private static BasePropertyDeclarationSyntax? CreateProperty(SymbolWrapper<IPropertySymbol> source, ImmutableArray<IMarshalType> marshals)
         {
             (INamedTypeSymbol symbol, INamedTypeSymbol target, IPropertySymbol? wrapper, IPropertySymbol property) = source;
             switch (property)
@@ -383,7 +436,28 @@ namespace WinRTWrapper.SourceGenerators
                             && x.TypeArguments[1].Equals(property.Type, SymbolEqualityComparer.Default)))))
                     {
                         IMarshalType returnType = GetWrapperType(Enumerable.Unwrap(wrapper?.GetAttributes(), property.GetAttributes()), marshals, property.Type, wrapper?.Type, VarianceKind.Out);
-                        ImmutableArray<(IMarshalType marshal, string name)> parameters = [.. property.Parameters.Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type, null, VarianceKind.In), x.Name))];
+                        ImmutableArray<(IMarshalType marshal, string name)> parameters = [.. GetParameters(source)];
+                        IEnumerable<(IMarshalType marshal, string name)> GetParameters(SymbolWrapper<IPropertySymbol> source)
+                        {
+                            (IPropertySymbol? wrapper, IPropertySymbol target) = source;
+                            if (wrapper == null)
+                            {
+                                return property.Parameters.Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type, null, VarianceKind.In), x.Name));
+                            }
+                            else
+                            {
+                                IEnumerable<(IMarshalType marshal, string name)> GetParameters(IPropertySymbol wrapper, IPropertySymbol target)
+                                {
+                                    for (int i = 0; i < wrapper.Parameters.Length; i++)
+                                    {
+                                        IParameterSymbol wrapperParam = wrapper.Parameters[i];
+                                        IParameterSymbol targetParam = target.Parameters[i];
+                                        yield return (GetWrapperType(Enumerable.Unwrap(wrapperParam.GetAttributes(), targetParam.GetAttributes()), marshals, targetParam.Type, wrapperParam.Type, VarianceKind.In), wrapperParam.Name);
+                                    }
+                                }
+                                return GetParameters(wrapper, target);
+                            }
+                        }
                         SyntaxList<AccessorDeclarationSyntax> list =
                             SyntaxFactory.SingletonList(
                                 SyntaxFactory.AccessorDeclaration(
@@ -483,7 +557,7 @@ namespace WinRTWrapper.SourceGenerators
         /// </summary>
         /// <param name="source">The event symbol to process.</param>
         /// <returns>The <see cref="MemberDeclarationSyntax"/> representing the event, or an empty enumerable if the event is not applicable.</returns>
-        private static IEnumerable<MemberDeclarationSyntax> AddEvent(SymbolWrapper<IEventSymbol> source, ImmutableArray<IMarshalType> marshals)
+        private static IEnumerable<MemberDeclarationSyntax> CreateEvent(SymbolWrapper<IEventSymbol> source, ImmutableArray<IMarshalType> marshals)
         {
             (INamedTypeSymbol symbol, INamedTypeSymbol target, IEventSymbol? wrapper, IEventSymbol @event) = source;
             IMethodSymbol invoke = @event.Type.GetMembers().OfType<IMethodSymbol>().FirstOrDefault(x => x.Name == "Invoke");
