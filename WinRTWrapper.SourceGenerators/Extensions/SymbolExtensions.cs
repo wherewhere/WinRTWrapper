@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using WinRTWrapper.SourceGenerators.Helpers;
+using WinRTWrapper.SourceGenerators.Models;
 
 namespace WinRTWrapper.SourceGenerators.Extensions
 {
@@ -48,13 +49,36 @@ namespace WinRTWrapper.SourceGenerators.Extensions
         };
 
         /// <summary>
-        /// Gets the <typeparamref name="T"/> member's modification string based on whether it is static or instance.
+        /// Adds the appropriate ref kind token(s) to the given <see cref="SyntaxTokenList"/>.
         /// </summary>
-        /// <typeparam name="T">The type of the member.</typeparam>
-        /// <param name="member">The member symbol.</param>
-        /// <returns>The member's modification string.</returns>
-        public static string GetMemberModify<T>(this T member) where T : ISymbol =>
-            $"public {(member.IsStatic ? "static " : string.Empty)}";
+        /// <param name="list">The <see cref="SyntaxTokenList"/> to which the ref kind token(s) will be added.</param>
+        /// <param name="refKind">The <see cref="RefKind"/> value representing the desired ref kind.</param>
+        /// <returns>The updated <see cref="SyntaxTokenList"/> with the added ref kind token(s).</returns>
+        /// <exception cref="ArgumentOutOfRangeException"></exception>
+        public static SyntaxTokenList AddRefKind(this in SyntaxTokenList list, RefKind refKind) => refKind switch
+        {
+            RefKind.None => list,
+            RefKind.Ref => list.Add(SyntaxFactory.Token(SyntaxKind.RefKeyword)),
+            RefKind.Out => list.Add(SyntaxFactory.Token(SyntaxKind.OutKeyword)),
+            RefKind.In => list.Add(SyntaxFactory.Token(SyntaxKind.InKeyword)),
+            RefKind.RefReadOnlyParameter => list.AddRange([SyntaxFactory.Token(SyntaxKind.RefKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword)]),
+            _ => throw new ArgumentOutOfRangeException(nameof(refKind), refKind, null),
+        };
+
+        /// <summary>
+        /// Gets the member modifier string for the wrapped symbol.
+        /// </summary>
+        /// <param name="wrapper">The symbol wrapper containing the method symbol.</param>
+        /// <returns>The member modifier string, which includes accessibility, static, and partial definition modifiers.</returns>
+        public static SyntaxTokenList GetParameterModify<T>(this T parameter) where T : IParameterSymbol
+        {
+            SyntaxTokenList list = SyntaxFactory.TokenList();
+            if (parameter.IsThis) { list = list.Add(SyntaxFactory.Token(SyntaxKind.ThisKeyword)); }
+            if (parameter.IsParams) { list = list.Add(SyntaxFactory.Token(SyntaxKind.ParamsKeyword)); }
+            if (parameter.ScopedKind == ScopedKind.ScopedRef) { list = list.Add(SyntaxFactory.Token(SyntaxKind.ScopedKeyword)); }
+            list = list.AddRefKind(parameter.RefKind);
+            return list;
+        }
 
         /// <summary>
         /// Gets the target <typeparamref name="T"/> member's name based on whether it is static or instance.

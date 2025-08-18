@@ -173,23 +173,6 @@ namespace WinRTWrapper.SourceGenerators
         private static BaseMethodDeclarationSyntax? CreateMethod(SymbolWrapper<IMethodSymbol> source, ImmutableArray<IMarshalType> marshals, ref bool? needConstructor)
         {
             (INamedTypeSymbol symbol, INamedTypeSymbol target, IMethodSymbol? wrapper, IMethodSymbol method) = source;
-            static bool CheckArgs(ImmutableArray<ITypeSymbol> arguments, ImmutableArray<IParameterSymbol> parameters)
-            {
-                if (parameters.Length >= arguments.Length)
-                {
-                    for (int i = 1; i <= arguments.Length; i++)
-                    {
-                        ITypeSymbol argument = arguments[^i];
-                        IParameterSymbol parameter = parameters[^i];
-                        if (!parameter.Type.IsSubclassOf(argument))
-                        {
-                            return false;
-                        }
-                    }
-                    return true;
-                }
-                return false;
-            }
             switch (method)
             {
                 case { MethodKind: MethodKind.Constructor }:
@@ -202,23 +185,23 @@ namespace WinRTWrapper.SourceGenerators
                         {
                             needConstructor ??= true;
                         }
-                        ImmutableArray<(IMarshalType marshal, string name)> parameters = [.. GetParameters(source)];
-                        IEnumerable<(IMarshalType marshal, string name)> GetParameters(SymbolWrapper<IMethodSymbol> source)
+                        ImmutableArray<(IMarshalType marshal, IParameterSymbol parameter)> parameters = [.. GetParameters(source)];
+                        IEnumerable<(IMarshalType marshal, IParameterSymbol parameter)> GetParameters(SymbolWrapper<IMethodSymbol> source)
                         {
                             (IMethodSymbol? wrapper, IMethodSymbol target) = source;
                             if (wrapper == null)
                             {
-                                return method.Parameters.Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type, null, VarianceKind.In), x.Name));
+                                return method.Parameters.Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type, null, VarianceKind.In), x));
                             }
                             else
                             {
-                                IEnumerable<(IMarshalType marshal, string name)> GetParameters(IMethodSymbol wrapper, IMethodSymbol target)
+                                IEnumerable<(IMarshalType marshal, IParameterSymbol parameter)> GetParameters(IMethodSymbol wrapper, IMethodSymbol target)
                                 {
                                     for (int i = 0; i < wrapper.Parameters.Length; i++)
                                     {
                                         IParameterSymbol wrapperParam = wrapper.Parameters[i];
                                         IParameterSymbol targetParam = target.Parameters[i];
-                                        yield return (GetWrapperType(Enumerable.Unwrap(wrapperParam.GetAttributes(), targetParam.GetAttributes()), marshals, targetParam.Type, wrapperParam.Type, VarianceKind.In), wrapperParam.Name);
+                                        yield return (GetWrapperType(Enumerable.Unwrap(wrapperParam.GetAttributes(), targetParam.GetAttributes()), marshals, targetParam.Type, wrapperParam.Type, VarianceKind.In), wrapperParam);
                                     }
                                 }
                                 return GetParameters(wrapper, target);
@@ -232,10 +215,12 @@ namespace WinRTWrapper.SourceGenerators
                                 SyntaxFactory.SeparatedList(
                                     parameters.Select(x =>
                                         SyntaxFactory.Parameter(
-                                            SyntaxFactory.Identifier(x.name))
+                                            SyntaxFactory.Identifier(x.parameter.Name))
                                             .WithType(
                                                 SyntaxFactory.IdentifierName(
-                                                    x.marshal.WrapperTypeName))))),
+                                                    x.marshal.WrapperTypeName))
+                                            .WithModifiers(
+                                                x.parameter.GetParameterModify())))),
                             SyntaxFactory.ConstructorInitializer(
                                 SyntaxKind.ThisConstructorInitializer,
                                 SyntaxFactory.ArgumentList(
@@ -249,7 +234,7 @@ namespace WinRTWrapper.SourceGenerators
                                                     SyntaxFactory.SeparatedList(
                                                         parameters.Select(x =>
                                                             SyntaxFactory.Argument(
-                                                                x.marshal.ConvertToManaged(SyntaxFactory.IdentifierName(x.name)))))),
+                                                                x.marshal.ConvertToManaged(SyntaxFactory.IdentifierName(x.parameter.Name)))))),
                                                 default))))),
                             SyntaxFactory.Block())
                             .WithLeadingTrivia(
@@ -257,26 +242,46 @@ namespace WinRTWrapper.SourceGenerators
                                     SyntaxFactory.Comment($"/// <inheritdoc cref=\"{method.GetConstructedFromDocumentationCommentId()}\"/>")));
                     }
                 case { MethodKind: MethodKind.Ordinary }:
-                    IMarshalType returnType = GetWrapperType(Enumerable.Unwrap(wrapper?.GetReturnTypeAttributes(), method.GetReturnTypeAttributes()), marshals, method.ReturnType, wrapper?.ReturnType, VarianceKind.Out);
-                    if (returnType is IMarshalTypeWithArgs { Arguments: { Length: > 0 } arguments } returnWithArgs && CheckArgs(arguments, method.Parameters))
+                    static bool CheckArgs(ImmutableArray<ITypeSymbol> arguments, ImmutableArray<IParameterSymbol> parameters, ImmutableArray<IParameterSymbol>? wrapper)
                     {
-                        ImmutableArray<(IMarshalType marshal, string name)> parameters = [.. GetParameters(source)];
-                        IEnumerable<(IMarshalType marshal, string name)> GetParameters(SymbolWrapper<IMethodSymbol> source)
+                        if (wrapper is not { Length: int length } || length + parameters.Length == arguments.Length)
+                        {
+                            if (parameters.Length >= arguments.Length)
+                            {
+                                for (int i = 1; i <= arguments.Length; i++)
+                                {
+                                    ITypeSymbol argument = arguments[^i];
+                                    IParameterSymbol parameter = parameters[^i];
+                                    if (!parameter.Type.IsSubclassOf(argument))
+                                    {
+                                        return false;
+                                    }
+                                }
+                                return true;
+                            }
+                        }
+                        return false;
+                    }
+                    IMarshalType returnType = GetWrapperType(Enumerable.Unwrap(wrapper?.GetReturnTypeAttributes(), method.GetReturnTypeAttributes()), marshals, method.ReturnType, wrapper?.ReturnType, VarianceKind.Out);
+                    if (returnType is IMarshalTypeWithArgs { Arguments: { Length: > 0 } arguments } returnWithArgs && CheckArgs(arguments, method.Parameters, wrapper?.Parameters))
+                    {
+                        ImmutableArray<(IMarshalType marshal, IParameterSymbol parameter)> parameters = [.. GetParameters(source)];
+                        IEnumerable<(IMarshalType marshal, IParameterSymbol parameter)> GetParameters(SymbolWrapper<IMethodSymbol> source)
                         {
                             (IMethodSymbol? wrapper, IMethodSymbol target) = source;
                             if (wrapper == null)
                             {
-                                return method.Parameters[..^arguments.Length].Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type, null, VarianceKind.In), x.Name));
+                                return method.Parameters[..^arguments.Length].Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type, null, VarianceKind.In), x));
                             }
                             else
                             {
-                                IEnumerable<(IMarshalType marshal, string name)> GetParameters(IMethodSymbol wrapper, IMethodSymbol target)
+                                IEnumerable<(IMarshalType marshal, IParameterSymbol parameter)> GetParameters(IMethodSymbol wrapper, IMethodSymbol target)
                                 {
                                     for (int i = 0; i < wrapper.Parameters.Length; i++)
                                     {
                                         IParameterSymbol wrapperParam = wrapper.Parameters[i];
                                         IParameterSymbol targetParam = target.Parameters[i];
-                                        yield return (GetWrapperType(Enumerable.Unwrap(wrapperParam.GetAttributes(), targetParam.GetAttributes()), marshals, targetParam.Type, wrapperParam.Type, VarianceKind.In), wrapperParam.Name);
+                                        yield return (GetWrapperType(Enumerable.Unwrap(wrapperParam.GetAttributes(), targetParam.GetAttributes()), marshals, targetParam.Type, wrapperParam.Type, VarianceKind.In), wrapperParam);
                                     }
                                 }
                                 return GetParameters(wrapper, target);
@@ -292,7 +297,7 @@ namespace WinRTWrapper.SourceGenerators
                                     SyntaxFactory.SeparatedList(
                                         parameters.Select(x =>
                                             SyntaxFactory.Argument(
-                                                x.marshal.ConvertToManaged(SyntaxFactory.IdentifierName(x.name))))
+                                                x.marshal.ConvertToManaged(SyntaxFactory.IdentifierName(x.parameter.Name))))
                                             .Concat(args.Select(x => SyntaxFactory.Argument(SyntaxFactory.IdentifierName(x.Name))))))),
                             [.. method.Parameters[^arguments.Length..]]);
                         return SyntaxFactory.MethodDeclaration(
@@ -302,7 +307,16 @@ namespace WinRTWrapper.SourceGenerators
                             default,
                             SyntaxFactory.Identifier(method.Name),
                             default,
-                            SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters.Select(x => SyntaxFactory.Parameter(SyntaxFactory.Identifier(x.name)).WithType(SyntaxFactory.IdentifierName(x.marshal.WrapperTypeName))))),
+                            SyntaxFactory.ParameterList(
+                                SyntaxFactory.SeparatedList(
+                                    parameters.Select(x =>
+                                        SyntaxFactory.Parameter(
+                                            SyntaxFactory.Identifier(x.parameter.Name))
+                                            .WithType(
+                                                SyntaxFactory.IdentifierName(
+                                                    x.marshal.WrapperTypeName))
+                                            .WithModifiers(
+                                                x.parameter.GetParameterModify())))),
                             default,
                             SyntaxFactory.Block(
                                 SyntaxFactory.SingletonList<StatementSyntax>(
@@ -346,23 +360,23 @@ namespace WinRTWrapper.SourceGenerators
                     }
                     else
                     {
-                        ImmutableArray<(IMarshalType marshal, string name)> parameters = [..GetParameters(source)];
-                        IEnumerable<(IMarshalType marshal, string name)> GetParameters(SymbolWrapper<IMethodSymbol> source)
+                        ImmutableArray<(IMarshalType marshal, IParameterSymbol parameter)> parameters = [..GetParameters(source)];
+                        IEnumerable<(IMarshalType marshal, IParameterSymbol parameter)> GetParameters(SymbolWrapper<IMethodSymbol> source)
                         {
                             (IMethodSymbol? wrapper, IMethodSymbol target) = source;
                             if (wrapper == null)
                             {
-                                return method.Parameters.Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type, null, VarianceKind.In), x.Name));
+                                return method.Parameters.Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type, null, VarianceKind.In), x));
                             }
                             else
                             {
-                                IEnumerable<(IMarshalType marshal, string name)> GetParameters(IMethodSymbol wrapper, IMethodSymbol target)
+                                IEnumerable<(IMarshalType marshal, IParameterSymbol parameter)> GetParameters(IMethodSymbol wrapper, IMethodSymbol target)
                                 {
                                     for (int i = 0; i < wrapper.Parameters.Length; i++)
                                     {
                                         IParameterSymbol wrapperParam = wrapper.Parameters[i];
                                         IParameterSymbol targetParam = target.Parameters[i];
-                                        yield return (GetWrapperType(Enumerable.Unwrap(wrapperParam.GetAttributes(), targetParam.GetAttributes()), marshals, targetParam.Type, wrapperParam.Type, VarianceKind.In), wrapperParam.Name);
+                                        yield return (GetWrapperType(Enumerable.Unwrap(wrapperParam.GetAttributes(), targetParam.GetAttributes()), marshals, targetParam.Type, wrapperParam.Type, VarianceKind.In), wrapperParam);
                                     }
                                 }
                                 return GetParameters(wrapper, target);
@@ -378,7 +392,7 @@ namespace WinRTWrapper.SourceGenerators
                                     SyntaxFactory.SeparatedList(
                                         parameters.Select(x =>
                                             SyntaxFactory.Argument(
-                                                x.marshal.ConvertToManaged(SyntaxFactory.IdentifierName(x.name))))))));
+                                                x.marshal.ConvertToManaged(SyntaxFactory.IdentifierName(x.parameter.Name))))))));
                         return SyntaxFactory.MethodDeclaration(
                             default,
                             SyntaxFactory.TokenList(source.GetMemberModify()),
@@ -390,10 +404,12 @@ namespace WinRTWrapper.SourceGenerators
                                 SyntaxFactory.SeparatedList(
                                     parameters.Select(x =>
                                         SyntaxFactory.Parameter(
-                                            SyntaxFactory.Identifier(x.name))
+                                            SyntaxFactory.Identifier(x.parameter.Name))
                                             .WithType(
                                                 SyntaxFactory.IdentifierName(
-                                                    x.marshal.WrapperTypeName))))),
+                                                    x.marshal.WrapperTypeName))
+                                            .WithModifiers(
+                                                x.parameter.GetParameterModify())))),
                             default,
                             SyntaxFactory.Block(
                                 SyntaxFactory.SingletonList<StatementSyntax>(
@@ -436,23 +452,23 @@ namespace WinRTWrapper.SourceGenerators
                             && x.TypeArguments[1].Equals(property.Type, SymbolEqualityComparer.Default)))))
                     {
                         IMarshalType returnType = GetWrapperType(Enumerable.Unwrap(wrapper?.GetAttributes(), property.GetAttributes()), marshals, property.Type, wrapper?.Type, VarianceKind.Out);
-                        ImmutableArray<(IMarshalType marshal, string name)> parameters = [.. GetParameters(source)];
-                        IEnumerable<(IMarshalType marshal, string name)> GetParameters(SymbolWrapper<IPropertySymbol> source)
+                        ImmutableArray<(IMarshalType marshal, IParameterSymbol parameter)> parameters = [.. GetParameters(source)];
+                        IEnumerable<(IMarshalType marshal, IParameterSymbol parameter)> GetParameters(SymbolWrapper<IPropertySymbol> source)
                         {
                             (IPropertySymbol? wrapper, IPropertySymbol target) = source;
                             if (wrapper == null)
                             {
-                                return property.Parameters.Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type, null, VarianceKind.In), x.Name));
+                                return property.Parameters.Select(x => (GetWrapperType(x.GetAttributes(), marshals, x.Type, null, VarianceKind.In), x));
                             }
                             else
                             {
-                                IEnumerable<(IMarshalType marshal, string name)> GetParameters(IPropertySymbol wrapper, IPropertySymbol target)
+                                IEnumerable<(IMarshalType marshal, IParameterSymbol parameter)> GetParameters(IPropertySymbol wrapper, IPropertySymbol target)
                                 {
                                     for (int i = 0; i < wrapper.Parameters.Length; i++)
                                     {
                                         IParameterSymbol wrapperParam = wrapper.Parameters[i];
                                         IParameterSymbol targetParam = target.Parameters[i];
-                                        yield return (GetWrapperType(Enumerable.Unwrap(wrapperParam.GetAttributes(), targetParam.GetAttributes()), marshals, targetParam.Type, wrapperParam.Type, VarianceKind.In), wrapperParam.Name);
+                                        yield return (GetWrapperType(Enumerable.Unwrap(wrapperParam.GetAttributes(), targetParam.GetAttributes()), marshals, targetParam.Type, wrapperParam.Type, VarianceKind.In), wrapperParam);
                                     }
                                 }
                                 return GetParameters(wrapper, target);
@@ -471,7 +487,7 @@ namespace WinRTWrapper.SourceGenerators
                                                         SyntaxFactory.SeparatedList(
                                                             parameters.Select(x =>
                                                                 SyntaxFactory.Argument(
-                                                                    x.marshal.ConvertToManaged(SyntaxFactory.IdentifierName(x.name))))))))))));
+                                                                    x.marshal.ConvertToManaged(SyntaxFactory.IdentifierName(x.parameter.Name))))))))))));
                         if (!property.IsReadOnly)
                         {
                             list = list.Add(
@@ -488,7 +504,7 @@ namespace WinRTWrapper.SourceGenerators
                                                             SyntaxFactory.SeparatedList(
                                                                 parameters.Select(x =>
                                                                     SyntaxFactory.Argument(
-                                                                        x.marshal.ConvertToManaged(SyntaxFactory.IdentifierName(x.name))))))),
+                                                                        x.marshal.ConvertToManaged(SyntaxFactory.IdentifierName(x.parameter.Name))))))),
                                                     SyntaxFactory.IdentifierName("value")))))));
                         }
                         return SyntaxFactory.IndexerDeclaration(
@@ -496,7 +512,15 @@ namespace WinRTWrapper.SourceGenerators
                             SyntaxFactory.TokenList(source.GetMemberModify()),
                             SyntaxFactory.IdentifierName(returnType.WrapperTypeName),
                             default,
-                            SyntaxFactory.BracketedParameterList(SyntaxFactory.SeparatedList(parameters.Select(x => SyntaxFactory.Parameter(SyntaxFactory.Identifier(x.name)).WithType(SyntaxFactory.IdentifierName(x.marshal.WrapperTypeName))))),
+                            SyntaxFactory.BracketedParameterList(
+                                SyntaxFactory.SeparatedList(
+                                    parameters.Select(x =>
+                                        SyntaxFactory.Parameter(
+                                            SyntaxFactory.Identifier(x.parameter.Name))
+                                            .WithType(
+                                                SyntaxFactory.IdentifierName(x.marshal.WrapperTypeName))
+                                            .WithModifiers(
+                                                x.parameter.GetParameterModify())))),
                             SyntaxFactory.AccessorList(list))
                             .WithLeadingTrivia(
                                 SyntaxFactory.TriviaList(

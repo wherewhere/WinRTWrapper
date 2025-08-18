@@ -82,7 +82,7 @@ namespace WinRTWrapper.SourceGenerators
                     {
                         temp.Remove(temp.OrderByDescending(x => x.Target.Parameters.Length).FirstOrDefault());
                         int count = wrappers.RemoveAll(x => temp.Contains(x));
-                        i = i - count + 1;
+                        i -= count;
                         continue;
                     }
                 }
@@ -302,7 +302,7 @@ namespace WinRTWrapper.SourceGenerators
                                     if (returnType is IMarshalTypeWithArgs { Arguments: { Length: > 0 } arguments } returnWithArgs)
                                     {
                                         ImmutableArray<IParameterSymbol> parameters = t.Parameters;
-                                        if (parameters.Length >= arguments.Length)
+                                        if (w.Parameters.Length + arguments.Length == parameters.Length)
                                         {
                                             for (int i = 1; i <= arguments.Length; i++)
                                             {
