@@ -12,24 +12,6 @@ namespace WinRTWrapper.SourceGenerators.Extensions
     internal static class SymbolExtensions
     {
         /// <summary>
-        /// Formats the <see cref="Accessibility"/> enum to a string representation.
-        /// </summary>
-        /// <param name="accessibility">The <see cref="Accessibility"/> value to format.</param>
-        /// <returns>The string representation of the accessibility.</returns>
-        /// <exception cref="ArgumentOutOfRangeException">Thrown when the <paramref name="accessibility"/> value is not recognized.</exception>
-        public static string FormatToString(this Accessibility accessibility) => accessibility switch
-        {
-            Accessibility.NotApplicable => string.Empty,
-            Accessibility.Private => "private",
-            Accessibility.ProtectedAndInternal or Accessibility.ProtectedAndFriend => "private protected",
-            Accessibility.Protected => "protected",
-            Accessibility.Internal or Accessibility.Friend => "internal",
-            Accessibility.ProtectedOrInternal or Accessibility.ProtectedOrFriend => "protected internal",
-            Accessibility.Public => "public",
-            _ => throw new ArgumentOutOfRangeException(nameof(accessibility), accessibility, null),
-        };
-
-        /// <summary>
         /// Adds the appropriate accessibility modifier token(s) to the given <see cref="SyntaxTokenList"/>.
         /// </summary>
         /// <param name="list">The <see cref="SyntaxTokenList"/> to which the accessibility modifier(s) will be added.</param>
@@ -253,5 +235,43 @@ namespace WinRTWrapper.SourceGenerators.Extensions
             VarianceKind.In => VarianceKind.Out,
             _ => throw new ArgumentOutOfRangeException(nameof(variance), variance, "Invalid variance kind specified."),
         };
+
+        /// <summary>
+        /// Find the first child element matching a given predicate, using a depth-first search.
+        /// </summary>
+        /// <typeparam name="T">The type of elements to match.</typeparam>
+        /// <param name="element">The root element.</param>
+        /// <param name="predicate">The predicate to use to match the child nodes.</param>
+        /// <returns>The child that was found, or <see langword="null"/>.</returns>
+        private static T? FindChild<T>(this SyntaxNode element, Func<T, bool>? predicate = null)
+            where T : SyntaxNode
+        {
+            foreach (SyntaxNode child in element.ChildNodes())
+            {
+                if (child is T result && predicate?.Invoke(result) != false)
+                {
+                    return result;
+                }
+
+                T? descendant = FindChild(child, predicate);
+
+                if (descendant != null)
+                {
+                    return descendant;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Find the first child (or self) element matching a given predicate, using a depth-first search.
+        /// </summary>
+        /// <typeparam name="T">The type of elements to match.</typeparam>
+        /// <param name="element">The root element.</param>
+        /// <param name="predicate">The predicate to use to match the child nodes.</param>
+        /// <returns>The child (or self) that was found, or <see langword="null"/>.</returns>
+        public static T? FindChildOrSelf<T>(this SyntaxNode element, Func<T, bool>? predicate = null)
+            where T : SyntaxNode => element is T result && predicate?.Invoke(result) != false ? result : FindChild(element, predicate);
     }
 }

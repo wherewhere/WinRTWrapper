@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Windows.Foundation;
 using WinRTWrapper.CodeAnalysis;
+using WinRTWrapper.Extensions;
 
 namespace WinRTWrapper.Test
 {
@@ -634,7 +635,7 @@ namespace WinRTWrapper.Test
         /// <summary>
         /// Gets or sets the value.
         /// </summary>
-        int Property {  get; set; }
+        int Property { get; set; }
 
         /// <summary>
         /// Gets or sets the value with a setter that allows modification.
@@ -670,7 +671,7 @@ namespace WinRTWrapper.Test
 #endif
     public sealed partial class SimpleWrapper
 #if NET
-        { }
+    { }
 #else
         : I { }
 #endif
@@ -711,6 +712,21 @@ namespace WinRTWrapper.Test
 
 #if !NET
         public static partial DefinedSimpleWrapper GetSelf(DefinedSimpleWrapper self);
+#endif
+
+#if NET
+        [System.Runtime.CompilerServices.AsyncMethodBuilder(typeof(AsyncActionMethodBuilder))]
+        public static async IAsyncAction TestAsync()
+        {
+            await Task.Yield();
+        }
+
+        [System.Runtime.CompilerServices.AsyncMethodBuilder(typeof(AsyncOperationMethodBuilder<>))]
+        public static async IAsyncOperation<int> TestAsync(int a)
+        {
+            await Task.Yield();
+            return a;
+        }
 #endif
     }
 

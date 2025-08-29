@@ -6,6 +6,13 @@
   </PropertyGroup>
 
   <PropertyGroup>
+    <WinRTWrapperIncludeGeneratedTypes>
+      WinRTWrapper.Extensions.AsyncActionMethodBuilder;
+      WinRTWrapper.Extensions.AsyncOperationMethodBuilder
+    </WinRTWrapperIncludeGeneratedTypes>
+  </PropertyGroup>
+
+  <PropertyGroup>
     <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net7.0'))">True</IsAotCompatible>
     <IsTrimmable Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'netcoreapp3.0'))">True</IsTrimmable>
   </PropertyGroup>
@@ -42,6 +49,11 @@
   <PropertyGroup Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'netstandard2.0'))">
     <DefineConstants>$(DefineConstants);COMP_NETSTANDARD2_0</DefineConstants>
   </PropertyGroup>
+  
+  <!-- Adds necessary fixups for multiline properties (replaces ';' characters with ',' and strip new lines) -->
+  <PropertyGroup>
+    <WinRTWrapperIncludeGeneratedTypes>$([System.Text.RegularExpressions.Regex]::Replace($(WinRTWrapperIncludeGeneratedTypes.Replace(';', ',')), '[\r\n]', ''))</WinRTWrapperIncludeGeneratedTypes>
+  </PropertyGroup>
 
   <ItemGroup Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'uap'))">
     <PackageReference Include="Microsoft.NETCore.UniversalWindowsPlatform" Version="6.2.14" PrivateAssets="all" />
@@ -67,6 +79,7 @@
   <ItemGroup>
     <CompilerVisibleProperty Include="CsWinRTComponent" />
     <CompilerVisibleProperty Include="OutputType" />
+    <CompilerVisibleProperty Include="WinRTWrapperIncludeGeneratedTypes" />
   </ItemGroup>
 
 </Project>

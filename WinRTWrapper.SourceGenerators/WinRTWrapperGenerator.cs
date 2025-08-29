@@ -24,6 +24,7 @@ namespace WinRTWrapper.SourceGenerators
         public void Initialize(IncrementalGeneratorInitializationContext context)
         {
             context.RegisterPostInitializationOutput(EmitPostGeneratedType);
+            context.RegisterSourceOutput(context.AnalyzerConfigOptionsProvider, EmitGeneratedType);
 
             // Prepare all the generation options in a single incremental model
             IncrementalValueProvider<GenerationOptions> generationOptions =
