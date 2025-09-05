@@ -32,12 +32,12 @@ namespace WinRTWrapper.SourceGenerators
                 /// Prior to being copied, one of its Task, SetResult, or SetException members must be accessed,
                 /// or else the copies may end up building distinct IAsyncAction instances.
                 /// </remarks>
-                internal readonly struct AsyncActionMethodBuilder
+                internal struct AsyncActionMethodBuilder
                 {
                     /// <summary>
                     /// The underlying builder.
                     /// </summary>
-                    private readonly global::System.Runtime.CompilerServices.AsyncTaskMethodBuilder _builder;
+                    private global::System.Runtime.CompilerServices.AsyncTaskMethodBuilder _builder;
 
                     /// <summary>
                     /// Initializes a new <see cref="AsyncActionMethodBuilder"/> struct with the specified builder.
@@ -168,12 +168,12 @@ namespace WinRTWrapper.SourceGenerators
                 /// Prior to being copied, one of its Task, SetResult, or SetException members must be accessed,
                 /// or else the copies may end up building distinct Task instances.
                 /// </remarks>
-                internal readonly struct AsyncOperationMethodBuilder<TResult>
+                internal struct AsyncOperationMethodBuilder<TResult>
                 {
                     /// <summary>
                     /// The underlying builder.
                     /// </summary>
-                    private readonly global::System.Runtime.CompilerServices.AsyncTaskMethodBuilder<TResult> _builder;
+                    private global::System.Runtime.CompilerServices.AsyncTaskMethodBuilder<TResult> _builder;
 
                     /// <summary>
                     /// Initializes a new <see cref="AsyncOperationMethodBuilder{TResult}"/> struct.
