@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="WinRTWrapper.CodeFixProvider/WinRTWrapper.CodeFixProvider.csproj" />
+  <Project Path="WinRTWrapper.SourceGenerators/WinRTWrapper.SourceGenerators.csproj" />
+  <Project Path="WinRTWrapper.Test/WinRTWrapper.Test.csproj" />
+</Solution>

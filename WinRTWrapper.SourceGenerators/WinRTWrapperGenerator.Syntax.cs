@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
-using System.Text;
 using WinRTWrapper.SourceGenerators.Extensions;
 using WinRTWrapper.SourceGenerators.Models;
 using Enumerable = WinRTWrapper.SourceGenerators.Extensions.Enumerable;
@@ -23,7 +22,6 @@ namespace WinRTWrapper.SourceGenerators
         /// <returns>The <see cref="MemberDeclarationSyntax"/> representing the initialization of the wrapper class.</returns>
         private static IEnumerable<MemberDeclarationSyntax> CreateInitMember((INamedTypeSymbol, INamedTypeSymbol) source, bool isPublic = false)
         {
-            StringBuilder builder = new();
             (INamedTypeSymbol symbol, INamedTypeSymbol target) = source;
             if (!target.IsStatic)
             {
