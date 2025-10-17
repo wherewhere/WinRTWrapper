@@ -166,7 +166,7 @@ namespace System.Runtime.CompilerServices
 
             string? s = value switch
             {
-                IFormattable formattable => formattable.ToString(format: null, _provider), // constrained call avoiding boxing for value types
+                IFormattable => ((IFormattable)value).ToString(format: null, _provider), // constrained call avoiding boxing for value types
                 _ => value?.ToString(),
             };
 
@@ -193,7 +193,7 @@ namespace System.Runtime.CompilerServices
 
             string? s = value switch
             {
-                IFormattable formattable => formattable.ToString(format, _provider), // constrained call avoiding boxing for value types
+                IFormattable => ((IFormattable)value).ToString(format, _provider), // constrained call avoiding boxing for value types
                 _ => value?.ToString(),
             };
 
@@ -274,7 +274,7 @@ namespace System.Runtime.CompilerServices
         /// Writes the specified character span to the handler.
         /// </summary>
         /// <param name="value">The span to write.</param>
-        public void AppendFormatted(params ReadOnlySpan<char> value) => _ = _stringBuilder.Append(value.ToArray());
+        public void AppendFormatted(scoped ReadOnlySpan<char> value) => _ = _stringBuilder.Append(value.ToArray());
 
         /// <summary>
         /// Writes the specified string of chars to the handler.
@@ -282,7 +282,7 @@ namespace System.Runtime.CompilerServices
         /// <param name="value">The span to write.</param>
         /// <param name="alignment">Minimum number of characters that should be written for this value.  If the value is negative, it indicates left-aligned and the required minimum is the absolute value.</param>
         /// <param name="__">The format string.</param>
-        public void AppendFormatted(ReadOnlySpan<char> value, int alignment = 0, string? __ = null)
+        public void AppendFormatted(scoped ReadOnlySpan<char> value, int alignment = 0, string? __ = null)
         {
             bool leftAlign = false;
             if (alignment < 0)
@@ -328,6 +328,41 @@ namespace System.Runtime.CompilerServices
             // formatted with both an alignment and a format, or b) the compiler is unable to target type to T. It
             // exists purely to help make cases from (b) compile. Just delegate to the T-based implementation.
             AppendFormatted<object?>(value, alignment, format);
+        #endregion
+
+        #region AppendFormatted char
+        /// <summary>
+        /// Writes the specified value to the handler.
+        /// </summary>
+        /// <param name="value">The value to write.</param>
+        public void AppendFormatted(char value)
+        {
+            // If there's a custom formatter, always use it.
+            if (_hasCustomFormatter)
+            {
+                AppendCustomFormatter(value, format: null);
+                return;
+            }
+
+            _ = _provider == null
+                ? _stringBuilder.Append(value)
+                : _stringBuilder.Append(value.ToString(_provider));
+        }
+
+        /// <summary>
+        /// Writes the specified value to the handler.
+        /// </summary>
+        /// <param name="value">The value to write.</param>
+        /// <param name="alignment">Minimum number of characters that should be written for this value.  If the value is negative, it indicates left-aligned and the required minimum is the absolute value.</param>
+        public void AppendFormatted(char value, int alignment)
+        {
+            int startingPos = _stringBuilder.Length;
+            AppendFormatted(value);
+            if (alignment != 0)
+            {
+                AppendOrInsertAlignmentIfNeeded(startingPos, alignment);
+            }
+        }
         #endregion
         #endregion
 

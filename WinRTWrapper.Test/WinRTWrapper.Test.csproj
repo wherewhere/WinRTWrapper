@@ -2,7 +2,8 @@
 
   <PropertyGroup>
     <LangVersion>11.0</LangVersion>
-    <TargetFrameworks>uap10.0;uap10.0.15138.0;net8.0-windows10.0.17763.0</TargetFrameworks>
+    <TargetFrameworks>uap10.0;uap10.0.15138.0</TargetFrameworks>
+    <TargetFrameworks>$(TargetFrameworks);net8.0-windows10.0.17763.0</TargetFrameworks>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -26,7 +27,7 @@
   <PropertyGroup Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net5.0-windows10.0.17763.0'))">
     <CsWinRTComponent>true</CsWinRTComponent>
   </PropertyGroup>
-  
+
   <PropertyGroup Condition="'$(TargetFramework)' == 'uap10.0'">
     <TargetPlatformMinVersion>10.0</TargetPlatformMinVersion>
   </PropertyGroup>
@@ -34,7 +35,7 @@
   <PropertyGroup Condition="'$(TargetFramework)' == 'uap10.0.15138.0'">
     <TargetPlatformMinVersion>10.0.15138.0</TargetPlatformMinVersion>
   </PropertyGroup>
-  
+
   <PropertyGroup Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'uap'))">
     <CopyLocalLockFileAssemblies>False</CopyLocalLockFileAssemblies>
     <DefaultLanguage>en-US</DefaultLanguage>
@@ -49,7 +50,7 @@
   <PropertyGroup Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'netstandard2.0'))">
     <DefineConstants>$(DefineConstants);COMP_NETSTANDARD2_0</DefineConstants>
   </PropertyGroup>
-  
+
   <!-- Adds necessary fixups for multiline properties (replaces ';' characters with ',' and strip new lines) -->
   <PropertyGroup>
     <WinRTWrapperIncludeGeneratedTypes>$([System.Text.RegularExpressions.Regex]::Replace($(WinRTWrapperIncludeGeneratedTypes.Replace(';', ',')), '[\r\n]', ''))</WinRTWrapperIncludeGeneratedTypes>
@@ -58,7 +59,7 @@
   <ItemGroup Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'uap'))">
     <PackageReference Include="Microsoft.NETCore.UniversalWindowsPlatform" Version="6.2.14" PrivateAssets="all" />
   </ItemGroup>
-  
+
   <ItemGroup Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net6.0'))">
     <PackageReference Include="Microsoft.Windows.CsWinRT" Version="2.2.0" />
   </ItemGroup>
