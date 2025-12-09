@@ -1,0 +1,16 @@
+﻿{
+  "$schema": "https://github.com/mhutch/MonoDevelop.MSBuildEditor/raw/refs/heads/main/MonoDevelop.MSBuild/Schemas/buildschema.json",
+  "properties": {
+    "WinRTWrapperIncludeGeneratedTypes": {
+      "description": "The MSBuild property for including generated types of extensions",
+      "isList": true,
+      "listSeparators": ";,",
+      "type": {
+        "values": {
+          "WinRTWrapper.Extensions.AsyncActionMethodBuilder": "Provides a builder for asynchronous methods that return IAsyncAction. This type is intended for compiler use only.",
+          "WinRTWrapper.Extensions.AsyncOperationMethodBuilder": "Provides a builder for asynchronous methods that return IAsyncOperation<TResult>. This type is intended for compiler use only."
+        }
+      }
+    }
+  }
+}

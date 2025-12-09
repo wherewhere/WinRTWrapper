@@ -8,6 +8,7 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using WinRTWrapper.SourceGenerators.Constants;
 using WinRTWrapper.SourceGenerators.Extensions;
 using WinRTWrapper.SourceGenerators.Helpers;
 using WinRTWrapper.SourceGenerators.Models;
@@ -288,7 +289,7 @@ namespace WinRTWrapper.SourceGenerators
 
         private void EmitGeneratedType(SourceProductionContext context, AnalyzerConfigOptionsProvider options)
         {
-            ImmutableArray<string> includeGeneratedTypes = options.GetStringArrayMSBuildProperty("WinRTWrapperIncludeGeneratedTypes");
+            ImmutableArray<string> includeGeneratedTypes = options.GetStringArrayMSBuildProperty(MSBuildProperties.WinRTWrapperIncludeGeneratedTypes);
             foreach (string includeGeneratedType in includeGeneratedTypes)
             {
                 switch (includeGeneratedType)

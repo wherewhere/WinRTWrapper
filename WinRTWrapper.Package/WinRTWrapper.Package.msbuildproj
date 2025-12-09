@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.Build.NoTargets" DefaultTargets="Pack">
+
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <VersionSuffix>pre.1</VersionSuffix>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <DevelopmentDependency>true</DevelopmentDependency>
+    <PackageIcon>Icon.png</PackageIcon>
+    <PackageId>WinRTWrapper</PackageId>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\WinRTWrapper.SourceGenerators\WinRTWrapper.SourceGenerators.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup Label="Package">
+    <None Include="..\logo.png" PackagePath="\Icon.png" Pack="true" />
+    <None Include="..\README.md" PackagePath="\README.md" Pack="true" />
+    <!-- Include the custom .targets file to check the source generator -->
+    <None Include="..\WinRTWrapper.SourceGenerators\Properties\WinRTWrapper.targets*" PackagePath="build\;buildTransitive\" Pack="true" />
+    <!-- Pack the source generator binary -->
+    <None Include="..\WinRTWrapper.SourceGenerators\bin\$(Configuration)\netstandard2.0\WinRTWrapper.SourceGenerators.dll" PackagePath="analyzers\dotnet" Pack="true" />
+  </ItemGroup>
+
+</Project>

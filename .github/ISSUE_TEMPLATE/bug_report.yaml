@@ -29,9 +29,9 @@ body:
   - type: dropdown
     attributes:
       label: NuGet package version
-      description: Specify the version of Enchants Order you're using.
+      description: Specify the version of WinRT Wrapper you're using.
       options:
-        - "0.0.1"
+        - "0.0.1-pre.1"
   - type: dropdown
     attributes:
       label: .NET Platform
@@ -50,6 +50,7 @@ body:
         - ".NET 7"
         - ".NET 8"
         - ".NET 9"
+        - ".NET 10"
         - "Others"
   - type: dropdown
     attributes:
@@ -57,14 +58,9 @@ body:
       description: Which IDE are you using?
       multiple: true
       options:
-        - "Visual Studio 2022-preview"
+        - "Visual Studio Insiders"
+        - "Visual Studio 2026"
         - "Visual Studio 2022"
-        - "Visual Studio 2019"
-        - "Visual Studio 2017"
-        - "Visual Studio 2015"
-        - "Visual Studio 2013"
-        - "Visual Studio 2012"
-        - "Visual Studio 2010"
         - "Other"
   - type: textarea
     attributes:

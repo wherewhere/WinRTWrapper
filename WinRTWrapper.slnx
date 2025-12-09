@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="WinRTWrapper.CodeFixProvider/WinRTWrapper.CodeFixProvider.csproj" />
+  <Project Path="WinRTWrapper.Package/WinRTWrapper.Package.msbuildproj" Type="13b669be-bb05-4ddf-9536-439f39a36129" />
   <Project Path="WinRTWrapper.SourceGenerators/WinRTWrapper.SourceGenerators.csproj" />
   <Project Path="WinRTWrapper.Test/WinRTWrapper.Test.csproj" />
 </Solution>

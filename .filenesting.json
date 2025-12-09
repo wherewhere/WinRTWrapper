@@ -8,6 +8,13 @@
             ".cs"
           ]
         }
+      },
+      "fileToFile": {
+        "add": {
+          "WinRTWrapper.targets.buildschema.json": [
+            "WinRTWrapper.targets"
+          ]
+        }
       }
     }
   }

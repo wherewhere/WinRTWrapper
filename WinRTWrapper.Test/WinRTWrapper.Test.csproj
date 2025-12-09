@@ -51,11 +51,6 @@
     <DefineConstants>$(DefineConstants);COMP_NETSTANDARD2_0</DefineConstants>
   </PropertyGroup>
 
-  <!-- Adds necessary fixups for multiline properties (replaces ';' characters with ',' and strip new lines) -->
-  <PropertyGroup>
-    <WinRTWrapperIncludeGeneratedTypes>$([System.Text.RegularExpressions.Regex]::Replace($(WinRTWrapperIncludeGeneratedTypes.Replace(';', ',')), '[\r\n]', ''))</WinRTWrapperIncludeGeneratedTypes>
-  </PropertyGroup>
-
   <ItemGroup Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'uap'))">
     <PackageReference Include="Microsoft.NETCore.UniversalWindowsPlatform" Version="6.2.14" PrivateAssets="all" />
   </ItemGroup>
@@ -77,10 +72,5 @@
     </ProjectReference>
   </ItemGroup>
 
-  <ItemGroup>
-    <CompilerVisibleProperty Include="CsWinRTComponent" />
-    <CompilerVisibleProperty Include="OutputType" />
-    <CompilerVisibleProperty Include="WinRTWrapperIncludeGeneratedTypes" />
-  </ItemGroup>
-
+  <Import Project="..\WinRTWrapper.SourceGenerators\Properties\WinRTWrapper.targets" />
 </Project>

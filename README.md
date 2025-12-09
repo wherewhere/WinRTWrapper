@@ -3,6 +3,7 @@ A wrapper source generator for WinRT
 
 [![Issues](https://img.shields.io/github/issues/wherewhere/WinRTWrapper.svg?label=Issues&style=flat-square)](https://github.com/wherewhere/WinRTWrapper/issues "Issues")
 [![Stargazers](https://img.shields.io/github/stars/wherewhere/WinRTWrapper.svg?label=Stars&style=flat-square)](https://github.com/wherewhere/WinRTWrapper/stargazers "Stargazers")
+[![NuGet](https://img.shields.io/nuget/dt/WinRTWrapper.svg?logo=NuGet&style=flat-square)](https://www.nuget.org/packages/WinRTWrapper "NuGet")
 
 ## Support Language
 - C# ISO-2 or later
@@ -186,3 +187,6 @@ internal class Simple;
 
 ## Notice
 Since C#/WinRT is not IL/WinRT, you should define every members in the wrapper class. So that the C#/WinRT can generate the correct WinRT metadata for the wrapper class.
+
+## Contributors
+[![Contributors](https://contrib.rocks/image?repo=wherewhere/WinRTWrapper)](https://github.com/wherewhere/WinRTWrapper/graphs/contributors "Contributors")
