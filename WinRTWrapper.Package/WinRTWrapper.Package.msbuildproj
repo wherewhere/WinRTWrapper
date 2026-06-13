@@ -3,7 +3,6 @@
   <PropertyGroup>
     <NoWarn>$(NoWarn);NU5128</NoWarn>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <VersionSuffix>pre.1</VersionSuffix>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -23,7 +22,7 @@
     <!-- Include the custom .targets file to check the source generator -->
     <None Include="..\WinRTWrapper.SourceGenerators\Properties\WinRTWrapper.targets*" PackagePath="build\;buildTransitive\" Pack="true" />
     <!-- Pack the source generator binary -->
-    <None Include="..\WinRTWrapper.SourceGenerators\bin\$(Configuration)\netstandard2.0\WinRTWrapper.SourceGenerators.dll" PackagePath="analyzers\dotnet" Pack="true" />
+    <None Include="..\WinRTWrapper.SourceGenerators\bin\$(Configuration)\netstandard2.0\*.dll" PackagePath="analyzers\dotnet" Pack="true" />
   </ItemGroup>
 
 </Project>

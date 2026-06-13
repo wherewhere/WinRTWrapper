@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <Authors>wherewhere</Authors>
-    <Copyright>Copyright © 2017 - 2025 wherewhere. All Rights Reserved.</Copyright>
+    <Copyright>Copyright © 2017 - 2026 wherewhere. All Rights Reserved.</Copyright>
     <LangVersion>latest</LangVersion>
     <PackageIconUrl>https://raw.githubusercontent.com/wherewhere/WinRTWrapper/main/logo.png</PackageIconUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -13,6 +13,7 @@
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/wherewhere/WinRTWrapper</RepositoryUrl>
     <VersionPrefix>0.0.1</VersionPrefix>
+    <VersionSuffix>pre.2</VersionSuffix>
     <Description>A wrapper source generator for WinRT.</Description>
   </PropertyGroup>
 
