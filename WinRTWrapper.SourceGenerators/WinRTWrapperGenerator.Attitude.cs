@@ -286,10 +286,9 @@ namespace WinRTWrapper.SourceGenerators
             """;
 
         /// <summary>
-        /// Emits the source for a given <see cref="GeneratedType"/> object.
+        /// Emits the source of Attitudes.
         /// </summary>
         /// <param name="context">The input <see cref="IncrementalGeneratorPostInitializationContext"/> instance to use to emit code.</param>
-        /// <param name="type">The <see cref="GeneratedType"/> object with info on the source to emit.</param>
         private void EmitPostGeneratedType(IncrementalGeneratorPostInitializationContext context)
         {
             context.AddSource($"{nameof(GenerateMember)}.g.cs", GenerateMember);

@@ -716,13 +716,13 @@ namespace WinRTWrapper.Test
 
 #if NET
         [System.Runtime.CompilerServices.AsyncMethodBuilder(typeof(AsyncActionMethodBuilder))]
-        public static async IAsyncAction TestAsync()
+        internal static async IAsyncAction TestAsync()
         {
             await Task.Yield();
         }
 
         [System.Runtime.CompilerServices.AsyncMethodBuilder(typeof(AsyncOperationMethodBuilder<>))]
-        public static async IAsyncOperation<int> TestAsync(int a)
+        internal static async IAsyncOperation<int> TestAsync(int a)
         {
             await Task.Yield();
             return a;

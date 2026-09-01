@@ -4,6 +4,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Reflection.Metadata;
 using System.Text;
 using System.Threading;
 using WinRTWrapper.SourceGenerators.Extensions;
@@ -152,22 +153,54 @@ namespace WinRTWrapper.SourceGenerators
                 }
             }
 
-            if (needConstructor == true)
+            switch (needConstructor)
             {
-                members.Add(
-                    SyntaxFactory.ConstructorDeclaration(
-                        default,
-                        SyntaxFactory.TokenList(
-                            SyntaxFactory.Token(SyntaxKind.InternalKeyword)),
-                        SyntaxFactory.Identifier(symbol.Name),
-                        SyntaxFactory.ParameterList(),
-                        default,
-                        SyntaxFactory.Block())
-                    .WithLeadingTrivia(
-                        SyntaxFactory.TriviaList(
-                            SyntaxFactory.Comment("///<summary>"),
-                            SyntaxFactory.Comment($"/// Initializes a new instance of the <see cref=\"{symbol.GetDocumentationCommentId()}\"/> class."),
-                            SyntaxFactory.Comment("///</summary>"))));
+                case false:
+                case null when target.IsStatic:
+                    break;
+                case true:
+                case null when target.IsAbstract:
+                    members.Add(
+                        SyntaxFactory.ConstructorDeclaration(
+                            default,
+                            SyntaxFactory.TokenList(
+                                SyntaxFactory.Token(SyntaxKind.InternalKeyword)),
+                            SyntaxFactory.Identifier(symbol.Name),
+                            SyntaxFactory.ParameterList(),
+                            default,
+                            SyntaxFactory.Block())
+                        .WithLeadingTrivia(
+                            SyntaxFactory.TriviaList(
+                                SyntaxFactory.Comment("///<summary>"),
+                                SyntaxFactory.Comment($"/// Initializes a new instance of the <see cref=\"{symbol.GetDocumentationCommentId()}\"/> class."),
+                                SyntaxFactory.Comment("///</summary>"))));
+                    break;
+                case null:
+                    members.Add(
+                        SyntaxFactory.ConstructorDeclaration(
+                            default,
+                            SyntaxFactory.TokenList(
+                                SyntaxFactory.Token(SyntaxKind.PublicKeyword)),
+                            SyntaxFactory.Identifier(symbol.Name),
+                            SyntaxFactory.ParameterList(),
+                            SyntaxFactory.ConstructorInitializer(
+                                SyntaxKind.ThisConstructorInitializer,
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            default,
+                                            default,
+                                            SyntaxFactory.ObjectCreationExpression(
+                                                SyntaxFactory.IdentifierName(target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
+                                                SyntaxFactory.ArgumentList(),
+                                                default))))),
+                            SyntaxFactory.Block())
+                        .WithLeadingTrivia(
+                            SyntaxFactory.TriviaList(
+                                SyntaxFactory.Comment("///<summary>"),
+                                SyntaxFactory.Comment($"/// Initializes a new instance of the <see cref=\"{symbol.GetDocumentationCommentId()}\"/> class by a new instance of <see cref=\"{target.GetDocumentationCommentId()}\"/>."),
+                                SyntaxFactory.Comment("///</summary>"))));
+                    break;
             }
 
             SyntaxTokenList tokens = SyntaxFactory.TokenList().AddAccessibility(symbol.DeclaredAccessibility);
