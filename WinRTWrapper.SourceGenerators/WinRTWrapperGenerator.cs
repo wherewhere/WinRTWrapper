@@ -153,54 +153,22 @@ namespace WinRTWrapper.SourceGenerators
                 }
             }
 
-            switch (needConstructor)
+            if (needConstructor == true)
             {
-                case false:
-                case null when target.IsStatic:
-                    break;
-                case true:
-                case null when target.IsAbstract:
-                    members.Add(
-                        SyntaxFactory.ConstructorDeclaration(
-                            default,
-                            SyntaxFactory.TokenList(
-                                SyntaxFactory.Token(SyntaxKind.InternalKeyword)),
-                            SyntaxFactory.Identifier(symbol.Name),
-                            SyntaxFactory.ParameterList(),
-                            default,
-                            SyntaxFactory.Block())
-                        .WithLeadingTrivia(
-                            SyntaxFactory.TriviaList(
-                                SyntaxFactory.Comment("///<summary>"),
-                                SyntaxFactory.Comment($"/// Initializes a new instance of the <see cref=\"{symbol.GetDocumentationCommentId()}\"/> class."),
-                                SyntaxFactory.Comment("///</summary>"))));
-                    break;
-                case null:
-                    members.Add(
-                        SyntaxFactory.ConstructorDeclaration(
-                            default,
-                            SyntaxFactory.TokenList(
-                                SyntaxFactory.Token(SyntaxKind.PublicKeyword)),
-                            SyntaxFactory.Identifier(symbol.Name),
-                            SyntaxFactory.ParameterList(),
-                            SyntaxFactory.ConstructorInitializer(
-                                SyntaxKind.ThisConstructorInitializer,
-                                SyntaxFactory.ArgumentList(
-                                    SyntaxFactory.SingletonSeparatedList(
-                                        SyntaxFactory.Argument(
-                                            default,
-                                            default,
-                                            SyntaxFactory.ObjectCreationExpression(
-                                                SyntaxFactory.IdentifierName(target.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)),
-                                                SyntaxFactory.ArgumentList(),
-                                                default))))),
-                            SyntaxFactory.Block())
-                        .WithLeadingTrivia(
-                            SyntaxFactory.TriviaList(
-                                SyntaxFactory.Comment("///<summary>"),
-                                SyntaxFactory.Comment($"/// Initializes a new instance of the <see cref=\"{symbol.GetDocumentationCommentId()}\"/> class by a new instance of <see cref=\"{target.GetDocumentationCommentId()}\"/>."),
-                                SyntaxFactory.Comment("///</summary>"))));
-                    break;
+                members.Add(
+                    SyntaxFactory.ConstructorDeclaration(
+                        default,
+                        SyntaxFactory.TokenList(
+                            SyntaxFactory.Token(SyntaxKind.InternalKeyword)),
+                        SyntaxFactory.Identifier(symbol.Name),
+                        SyntaxFactory.ParameterList(),
+                        default,
+                        SyntaxFactory.Block())
+                    .WithLeadingTrivia(
+                        SyntaxFactory.TriviaList(
+                            SyntaxFactory.Comment("///<summary>"),
+                            SyntaxFactory.Comment($"/// Initializes a new instance of the <see cref=\"{symbol.GetDocumentationCommentId()}\"/> class."),
+                            SyntaxFactory.Comment("///</summary>"))));
             }
 
             SyntaxTokenList tokens = SyntaxFactory.TokenList().AddAccessibility(symbol.DeclaredAccessibility);
@@ -297,6 +265,7 @@ namespace WinRTWrapper.SourceGenerators
             {
                 return member switch
                 {
+                    { IsImplicitlyDeclared: true } => true,
                     IMethodSymbol method => method.IsPartialDefinition,
                     IPropertySymbol property => property.IsPartialDefinition,
                     IEventSymbol @event => @event.IsPartialDefinition,
